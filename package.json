@@ -10,6 +10,7 @@
 		"lint:fix": "bunx biome check --write .",
 		"format": "bunx biome format --write .",
 		"test": "bun test --pass-with-no-tests --check",
+		"db:types": "bunx kysely-codegen --dialect postgres --out-file src/infra/db/generated/db.d.ts",
 		"prepare:husky": "husky"
 	},
 	"lint-staged": {
