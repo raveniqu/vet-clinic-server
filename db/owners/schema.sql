@@ -49,5 +49,7 @@ CREATE TABLE owners (
     ),
     CONSTRAINT chk_owners_acquisition_channel CHECK (
         acquisition_channel IN ('WALK_IN', 'LINE_OA', 'WEB_PORTAL', 'REFERRAL', 'SOCIAL_MEDIA', 'CAMPAIGN')
-    )
+    ),
+    CONSTRAINT chk_owners_individual_fields CHECK (type <> 'INDIVIDUAL' OR (prefix IN ('MR', 'MS', 'MRS') AND tax_id_hash IS NOT NULL)),
+    CONSTRAINT chk_owners_juristic_fields CHECK (type <> 'JURISTIC' OR (prefix IN ('COMMERCIAL', 'NON_PROFIT', 'OTHER') AND last_name IS NULL AND tax_id_hash IS NULL AND date_of_birth IS NULL AND gender IS NULL))
 );

@@ -7,7 +7,7 @@ CREATE TABLE owner_consents (
     id BIGSERIAL PRIMARY KEY,
 
     -- Foreign Key to owners table
-    owner_id BIGINT NOT NULL REFERENCES owners (id) ON DELETE CASCADE,
+    owner_id BIGINT NOT NULL REFERENCES owners (id) ON DELETE RESTRICT,
 
     -- Consent Classification & Status
     type VARCHAR(50) NOT NULL,
