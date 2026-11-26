@@ -1,3 +1,3 @@
-export type Context = {
+export type RequestContext = {
 	readonly signal: AbortSignal
 }

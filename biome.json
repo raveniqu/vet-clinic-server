@@ -39,6 +39,6 @@
 		}
 	},
 	"files": {
-		"ignore": ["node_modules/**", "dist/**", "build/**", "coverage/**", "out/**", "**/*.tsbuildinfo", "**/*.d.ts", "src/infra/db/generated/**"]
+		"ignore": ["node_modules/**", "dist/**", "build/**", "coverage/**", "out/**", "**/*.tsbuildinfo", "**/*.d.ts", "src/shared/db/generated/**"]
 	}
 }

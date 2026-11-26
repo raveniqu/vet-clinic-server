@@ -6,7 +6,7 @@ Feature-sliced OOP CQRS starter with `postgres.js` + `kysely-postgres-js`, `neve
 
 ```bash
 bun install
-bun run lint && bun run typecheck
-bun test --check
+bun run lint
+bun run test
 bun run dev
 ```
