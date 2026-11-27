@@ -3,6 +3,7 @@ import { Kysely, sql } from "kysely"
 import { PostgresJSDialect } from "kysely-postgres-js"
 import { type Result, ResultAsync, err, ok } from "neverthrow"
 import postgres from "postgres"
+import type { DB } from "./generated/db"
 
 const IDLE_TIMEOUT_SECONDS = 20
 const MAX_LIFETIME_SECONDS = 1800 // 30 minutes
@@ -15,12 +16,9 @@ const READY_MAX_BACKOFF_MS = 2000
 
 const logger = getLogger(["app", "db"])
 
-// Placeholder until `bun run db:types` generates src/shared/db/generated/db.d.ts.
-type DbSchema = unknown
-
 export type DbPools = {
-	readonly rw: Kysely<DbSchema>
-	readonly ro: Kysely<DbSchema>
+	readonly rw: Kysely<DB>
+	readonly ro: Kysely<DB>
 	destroy(): Promise<void>
 }
 
@@ -36,7 +34,7 @@ export type DbPoolConfig = {
 }
 
 export function createDbPools(cfg: DbPoolConfig): DbPools {
-	const rw = new Kysely<DbSchema>({
+	const rw = new Kysely<DB>({
 		dialect: new PostgresJSDialect({
 			postgres: postgres(cfg.rwUrl, {
 				max: cfg.rwMax,
@@ -55,7 +53,7 @@ export function createDbPools(cfg: DbPoolConfig): DbPools {
 		}),
 	})
 
-	const ro = new Kysely<DbSchema>({
+	const ro = new Kysely<DB>({
 		dialect: new PostgresJSDialect({
 			postgres: postgres(cfg.roUrl, {
 				max: cfg.roMax,
