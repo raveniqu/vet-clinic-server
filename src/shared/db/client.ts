@@ -103,28 +103,58 @@ function assertRoReadOnly(db: DbPools): ResultAsync<void, Error> {
 	})
 }
 
-// Blocks until both pools answer, retrying with backoff up to READY_DEADLINE_MS. A read-only misconfig on db.ro is permanent, so it is not retried.
-export async function waitForDbReady(db: DbPools): Promise<Result<void, Error>> {
-	const deadline = Date.now() + READY_DEADLINE_MS
-	let backoffMs = READY_INITIAL_BACKOFF_MS
+export type RetryOptions = {
+	deadlineMs: number
+	initialBackoffMs: number
+	maxBackoffMs: number
+	now: () => number
+	sleep: (ms: number) => Promise<void>
+}
+
+const DEFAULT_RETRY: RetryOptions = {
+	deadlineMs: READY_DEADLINE_MS,
+	initialBackoffMs: READY_INITIAL_BACKOFF_MS,
+	maxBackoffMs: READY_MAX_BACKOFF_MS,
+	now: Date.now,
+	sleep: Bun.sleep,
+}
+
+// Retries probe with backoff until it succeeds or the hard deadline passes. Each attempt is capped by the remaining time, so the deadline holds even when a probe hangs.
+export async function retryUntilReady(probe: () => ResultAsync<void, Error>, opts: RetryOptions = DEFAULT_RETRY): Promise<Result<void, Error>> {
+	const deadline = opts.now() + opts.deadlineMs
+	let backoffMs = opts.initialBackoffMs
 
 	for (let attempt = 1; ; attempt++) {
-		const ping = await pingPools(db)
-		if (ping.isOk()) {
-			break
+		const remainingMs = deadline - opts.now()
+		let timer: ReturnType<typeof setTimeout> | undefined
+		const timeout = new Promise<Result<void, Error>>((resolve) => {
+			timer = setTimeout(() => resolve(err(new Error("probe timed out"))), Math.max(remainingMs, 0))
+		})
+		const result = await Promise.race([probe(), timeout])
+		clearTimeout(timer)
+
+		if (result.isOk()) {
+			return ok(undefined)
 		}
-		if (Date.now() + backoffMs >= deadline) {
-			return err(new Error(`Database not ready after ${READY_DEADLINE_MS}ms: ${ping.error.message}`))
+		if (opts.now() + backoffMs >= deadline) {
+			return err(new Error(`Database not ready after ${opts.deadlineMs}ms: ${result.error.message}`))
 		}
 
 		logger.warn("Database not ready (attempt {attempt}), retrying in {backoffMs}ms: {reason}", {
 			attempt: attempt,
 			backoffMs: backoffMs,
-			reason: ping.error.message,
+			reason: result.error.message,
 		})
-		await Bun.sleep(backoffMs)
-		backoffMs = Math.min(backoffMs * 2, READY_MAX_BACKOFF_MS)
+		await opts.sleep(backoffMs)
+		backoffMs = Math.min(backoffMs * 2, opts.maxBackoffMs)
 	}
+}
 
+// Blocks until both pools answer. A read-only misconfig on db.ro is permanent, so it is checked once after connectivity and not retried.
+export async function waitForDbReady(db: DbPools): Promise<Result<void, Error>> {
+	const ready = await retryUntilReady(() => pingPools(db))
+	if (ready.isErr()) {
+		return err(ready.error)
+	}
 	return await assertRoReadOnly(db)
 }
