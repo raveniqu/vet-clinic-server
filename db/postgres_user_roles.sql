@@ -31,6 +31,11 @@ BEGIN
 END
 $$;
 
+
+SELECT rolname, rolsuper, rolcanlogin, rolcreatedb
+FROM pg_roles
+ORDER BY rolname;
+
 -- The read-only pool is read-only because of the role itself, not only because
 -- of how the backend opens its connections.
 ALTER ROLE vet_serverapp_ro SET default_transaction_read_only = on;
