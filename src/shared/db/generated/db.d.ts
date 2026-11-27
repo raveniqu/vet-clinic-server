@@ -3,4 +3,69 @@
  * Please do not edit it manually.
  */
 
-export interface DB {}
+import type { ColumnType } from "kysely";
+
+export type Generated<T> = T extends ColumnType<infer S, infer I, infer U>
+  ? ColumnType<S, I | undefined, U>
+  : ColumnType<T, T | undefined, T>;
+
+export type Int8 = ColumnType<string, bigint | number | string, bigint | number | string>;
+
+export type Timestamp = ColumnType<Date, Date | string, Date | string>;
+
+export interface OwnerAddresses {
+  address_line: string;
+  created_at: Generated<Timestamp>;
+  deleted_at: Timestamp | null;
+  district: string;
+  id: Generated<Int8>;
+  is_default: Generated<boolean>;
+  owner_id: Int8;
+  postal_code: string;
+  province: string;
+  subdistrict: string;
+  type: string;
+  updated_at: Generated<Timestamp>;
+}
+
+export interface OwnerConsents {
+  consented_at: Generated<Timestamp>;
+  created_at: Generated<Timestamp>;
+  id: Generated<Int8>;
+  is_granted: Generated<boolean>;
+  owner_id: Int8;
+  type: string;
+}
+
+export interface Owners {
+  acquisition_channel: string;
+  code: string;
+  created_at: Generated<Timestamp>;
+  date_of_birth: Timestamp | null;
+  deleted_at: Timestamp | null;
+  email: string | null;
+  first_name: string;
+  gender: string | null;
+  id: Generated<Int8>;
+  last_name: string | null;
+  line_id: string | null;
+  phone_no: string;
+  prefix: string;
+  tax_id: string;
+  tax_id_hash: string | null;
+  type: string;
+  updated_at: Generated<Timestamp>;
+}
+
+export interface RunningNumberSequences {
+  last_number: Generated<Int8>;
+  prefix: string;
+  sequence_date: Timestamp;
+}
+
+export interface DB {
+  owner_addresses: OwnerAddresses;
+  owner_consents: OwnerConsents;
+  owners: Owners;
+  running_number_sequences: RunningNumberSequences;
+}
