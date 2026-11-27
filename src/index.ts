@@ -1,10 +1,7 @@
 import { getLogger } from "@logtape/logtape"
-import { Elysia } from "elysia"
 
-import { type AppEnvConfig, loadConfig } from "src/shared/config/env"
-import { newAuthPlugin } from "src/shared/http/auth-plugin"
-import { newLoggerPlugin } from "src/shared/http/logger-plugin"
-import { newSecurityPlugin } from "src/shared/http/security-plugin"
+import { createApp } from "src/app"
+import { loadConfig } from "src/shared/config/env"
 import { setupLogging } from "src/shared/logger/logtape"
 
 const conf = loadConfig(process.env)
@@ -12,7 +9,7 @@ await setupLogging(conf)
 
 const logger = getLogger(["app", "bootstrap"])
 
-const app = newElysiaApp({
+const app = createApp({
 	nodeEnv: conf.NODE_ENV,
 	corsOrigins: conf.CORS_ORIGINS,
 }).listen({
@@ -46,18 +43,4 @@ async function gracefulShutdown(signal: string) {
 
 	logger.info("Graceful shutdown complete")
 	process.exit(0)
-}
-
-type ElysiaProps = {
-	nodeEnv: AppEnvConfig["NODE_ENV"]
-	corsOrigins: string[]
-	// db: DbPools
-	// sessions: SessionStore
-}
-
-function newElysiaApp(props: ElysiaProps) {
-	return new Elysia({ name: "api" })
-		.use(newLoggerPlugin)
-		.use(newSecurityPlugin({ nodeEnv: props.nodeEnv, allowedOrigins: props.corsOrigins }))
-		.use(newAuthPlugin())
 }
