@@ -1,6 +1,7 @@
 -- =============================================================================
 -- Table: owner_addresses
 -- Description: Stores physical, residential, and billing addresses for pet owners.
+-- Requires: db/owners/schema.sql (owner_id references owners.id)
 -- =============================================================================
 
 CREATE TABLE owner_addresses (

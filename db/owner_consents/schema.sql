@@ -1,6 +1,7 @@
 -- =============================================================================
 -- Table: owner_consents
 -- Description: Stores PDPA consent tracking and immutable audit history for pet owners.
+-- Requires: db/owners/schema.sql (owner_id references owners.id)
 -- =============================================================================
 
 CREATE TABLE owner_consents (

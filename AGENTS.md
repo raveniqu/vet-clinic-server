@@ -32,7 +32,7 @@ bun run format
 bunx tsc --noEmit
 bun run test         # bun test --pass-with-no-tests --check
 bun run db:types     # kysely-codegen -> src/shared/db/generated/db.d.ts
-# (not yet in repo) bun run db:up / db:reset  — recreate dev + test Postgres from db/schema.sql
+# (not yet in repo) bun run db:up / db:reset  — recreate dev + test Postgres from db/<table>/schema.sql + index.sql
 ```
 
 Before declaring work done: `bun run format && bun run lint && bunx tsc --noEmit && bun run test`, zero errors. Bare `bun test` strips types unchecked: always use `bun run test`.
@@ -44,7 +44,8 @@ Before declaring work done: `bun run format && bun run lint && bunx tsc --noEmit
 
 ```text
 ├── db/
-│   ├── schema.sql                 # (not yet in repo) single source of truth for DDL
+│   ├── postgres_user_roles.sql   # roles, grants, default privileges; run by hand as root_superuser, no passwords
+│   ├── <table>/                  # schema.sql + index.sql per table: single source of truth for DDL
 │   └── seed/                      # (not yet in repo) idempotent dev seeds
 ├── src/
 │   ├── index.ts                   # entrypoint: config, boot, SIGTERM/SIGINT. Currently also hosts newElysiaApp
@@ -166,8 +167,9 @@ Feature-sliced OOP CQRS. Business logic never lives in routes: routes parse, del
 
 ## 7. Database & Persistence
 
-- `db/schema.sql` is the sole schema source. Change flow: edit `db/schema.sql` (+ `db/seed/`) → `bun run db:reset` → `bun run db:types`. No versioned migration CLI yet.
-- **Pending decision:** before first production deploy, adopt a forward-only migration tool (reversible when possible). Until then `schema.sql` + reset is local/dev only: never treat it as a prod path.
+- `db/<table>/schema.sql` + `index.sql` per table are the sole schema source. `owner_addresses` and `owner_consents` reference `owners`, so apply in dependency order (`owners` first); each dependent file carries a `-- Requires:` line. Change flow: edit the table files (+ `db/seed/`) → `bun run db:reset` → `bun run db:types`. No versioned migration CLI yet.
+- **DEV database on the VPS:** one dedicated Postgres compose in Dokploy, described in `docs/adr/0001-dev-database-as-dedicated-compose.md`. DDL is applied **by hand in DBeaver as `dev_user_rw`**, never by a script. Roles and grants live in `db/postgres_user_roles.sql` (run by hand as `root_superuser`; re-run after a restore). The backend connects as `vet_serverapp_rw` (`DATABASE_RW_URL`) and `vet_serverapp_ro` (`DATABASE_RO_URL`); neither is superuser. Backups are manual dumps.
+- **Pending decision:** before first production deploy, adopt a forward-only migration tool (reversible when possible). Until then the per-table `schema.sql` + `index.sql` + reset are local/dev only: never treat them as a prod path.
 - Schema design reflects access patterns. Soft deletes, auditing, versioning only when intentional and documented.
 - Idempotency by design for client-retried writes, webhooks, payments.
 
