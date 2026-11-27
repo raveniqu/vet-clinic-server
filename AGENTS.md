@@ -176,11 +176,11 @@ Feature-sliced OOP CQRS. Business logic never lives in routes: routes parse, del
 
 ### PostgreSQL Connection & Pool Configuration (`src/shared/db/client.ts`)
 
-- **Pool sizing:** keep PostgreSQL's default `max_connections = 100`. Per-pool sizes via env: `DB_RW_MAX_POOL=1` / `DB_RO_MAX_POOL=1` in dev, `DB_RW_MAX_POOL=5` / `DB_RO_MAX_POOL=5` in production.
-- **Client lifecycle (`postgres.js`):** `connect_timeout: 10` (env `DB_CONNECT_TIMEOUT_SECONDS`), `idle_timeout: 20` (seconds), `max_lifetime: 1800` (30 min), `ssl: "prefer"` (`sslmode=prefer`), `prepare` via `DB_PREPARE` (default `true`; set `false` behind PgBouncer in transaction pooling mode).
+- **Pool sizing:** keep PostgreSQL's default `max_connections = 100`. Per-pool sizes via env: `DATABASE_RW_MAX_POOL=1` / `DATABASE_RO_MAX_POOL=1` in dev, `DATABASE_RW_MAX_POOL=5` / `DATABASE_RO_MAX_POOL=5` in production.
+- **Client lifecycle (`postgres.js`):** `connect_timeout: 10` (env `DATABASE_CONNECT_TIMEOUT_SECONDS`), `idle_timeout: 20` (seconds), `max_lifetime: 1800` (30 min), `ssl: "prefer"` (`sslmode=prefer`), `prepare` via `DATABASE_PREPARE` (default `true`; set `false` behind PgBouncer in transaction pooling mode).
 - **Server-side session timeouts:**
-  - **`db.rw` (`application_name: "api-rw"`):** `statement_timeout: 10000` (env `DB_RW_STATEMENT_TIMEOUT_MS`), `lock_timeout: 3000`, `idle_in_transaction_session_timeout: 10000`.
-  - **`db.ro` (`application_name: "api-ro"`):** `default_transaction_read_only: true` (sent as `on`-equivalent; `postgres.js` types it `boolean`), `statement_timeout: 5000` (env `DB_RO_STATEMENT_TIMEOUT_MS`), `idle_in_transaction_session_timeout: 5000`.
+  - **`db.rw` (`application_name: "api-rw"`):** `statement_timeout: 10000` (env `DATABASE_RW_STATEMENT_TIMEOUT_MS`), `lock_timeout: 3000`, `idle_in_transaction_session_timeout: 10000`.
+  - **`db.ro` (`application_name: "api-ro"`):** `default_transaction_read_only: true` (sent as `on`-equivalent; `postgres.js` types it `boolean`), `statement_timeout: 5000` (env `DATABASE_RO_STATEMENT_TIMEOUT_MS`), `idle_in_transaction_session_timeout: 5000`.
 
 ## 8. Security & Privacy
 

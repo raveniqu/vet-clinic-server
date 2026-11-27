@@ -13,12 +13,12 @@ const logger = getLogger(["app", "bootstrap"])
 const db = createDbPools({
 	rwUrl: conf.DATABASE_RW_URL,
 	roUrl: conf.DATABASE_RO_URL,
-	rwMax: conf.DB_RW_MAX_POOL,
-	roMax: conf.DB_RO_MAX_POOL,
-	connectTimeoutSeconds: conf.DB_CONNECT_TIMEOUT_SECONDS,
-	rwStatementTimeoutMs: conf.DB_RW_STATEMENT_TIMEOUT_MS,
-	roStatementTimeoutMs: conf.DB_RO_STATEMENT_TIMEOUT_MS,
-	prepare: conf.DB_PREPARE,
+	rwMax: conf.DATABASE_RW_MAX_POOL,
+	roMax: conf.DATABASE_RO_MAX_POOL,
+	connectTimeoutSeconds: conf.DATABASE_CONNECT_TIMEOUT_SECONDS,
+	rwStatementTimeoutMs: conf.DATABASE_RW_STATEMENT_TIMEOUT_MS,
+	roStatementTimeoutMs: conf.DATABASE_RO_STATEMENT_TIMEOUT_MS,
+	prepare: conf.DATABASE_PREPARE,
 })
 
 const dbReady = await waitForDbReady(db)

@@ -8,12 +8,12 @@ const EnvSchema = Type.Object({
 	CORS_ORIGINS: Type.String({ default: "http://localhost:5173" }),
 	DATABASE_RW_URL: Type.String({ minLength: 1 }),
 	DATABASE_RO_URL: Type.Optional(Type.String({ minLength: 1 })),
-	DB_RW_MAX_POOL: Type.Number({ default: 1, minimum: 1 }),
-	DB_RO_MAX_POOL: Type.Number({ default: 1, minimum: 1 }),
-	DB_CONNECT_TIMEOUT_SECONDS: Type.Number({ default: 10, minimum: 1 }),
-	DB_RW_STATEMENT_TIMEOUT_MS: Type.Number({ default: 10000, minimum: 100 }),
-	DB_RO_STATEMENT_TIMEOUT_MS: Type.Number({ default: 5000, minimum: 100 }),
-	DB_PREPARE: Type.Boolean({ default: true }),
+	DATABASE_RW_MAX_POOL: Type.Number({ default: 1, minimum: 1 }),
+	DATABASE_RO_MAX_POOL: Type.Number({ default: 1, minimum: 1 }),
+	DATABASE_CONNECT_TIMEOUT_SECONDS: Type.Number({ default: 10, minimum: 1 }),
+	DATABASE_RW_STATEMENT_TIMEOUT_MS: Type.Number({ default: 10000, minimum: 100 }),
+	DATABASE_RO_STATEMENT_TIMEOUT_MS: Type.Number({ default: 5000, minimum: 100 }),
+	DATABASE_PREPARE: Type.Boolean({ default: true }),
 })
 
 export type AppEnvConfig = {
@@ -23,12 +23,12 @@ export type AppEnvConfig = {
 	readonly CORS_ORIGINS: string[]
 	readonly DATABASE_RW_URL: string
 	readonly DATABASE_RO_URL: string
-	readonly DB_RW_MAX_POOL: number
-	readonly DB_RO_MAX_POOL: number
-	readonly DB_CONNECT_TIMEOUT_SECONDS: number
-	readonly DB_RW_STATEMENT_TIMEOUT_MS: number
-	readonly DB_RO_STATEMENT_TIMEOUT_MS: number
-	readonly DB_PREPARE: boolean
+	readonly DATABASE_RW_MAX_POOL: number
+	readonly DATABASE_RO_MAX_POOL: number
+	readonly DATABASE_CONNECT_TIMEOUT_SECONDS: number
+	readonly DATABASE_RW_STATEMENT_TIMEOUT_MS: number
+	readonly DATABASE_RO_STATEMENT_TIMEOUT_MS: number
+	readonly DATABASE_PREPARE: boolean
 }
 
 export function loadConfig(raw: Record<string, string | undefined>): Readonly<AppEnvConfig> {
@@ -49,11 +49,11 @@ export function loadConfig(raw: Record<string, string | undefined>): Readonly<Ap
 		CORS_ORIGINS: origins,
 		DATABASE_RW_URL: parsed.DATABASE_RW_URL,
 		DATABASE_RO_URL: parsed.DATABASE_RO_URL ?? parsed.DATABASE_RW_URL,
-		DB_RW_MAX_POOL: parsed.DB_RW_MAX_POOL,
-		DB_RO_MAX_POOL: parsed.DB_RO_MAX_POOL,
-		DB_CONNECT_TIMEOUT_SECONDS: parsed.DB_CONNECT_TIMEOUT_SECONDS,
-		DB_RW_STATEMENT_TIMEOUT_MS: parsed.DB_RW_STATEMENT_TIMEOUT_MS,
-		DB_RO_STATEMENT_TIMEOUT_MS: parsed.DB_RO_STATEMENT_TIMEOUT_MS,
-		DB_PREPARE: parsed.DB_PREPARE,
+		DATABASE_RW_MAX_POOL: parsed.DATABASE_RW_MAX_POOL,
+		DATABASE_RO_MAX_POOL: parsed.DATABASE_RO_MAX_POOL,
+		DATABASE_CONNECT_TIMEOUT_SECONDS: parsed.DATABASE_CONNECT_TIMEOUT_SECONDS,
+		DATABASE_RW_STATEMENT_TIMEOUT_MS: parsed.DATABASE_RW_STATEMENT_TIMEOUT_MS,
+		DATABASE_RO_STATEMENT_TIMEOUT_MS: parsed.DATABASE_RO_STATEMENT_TIMEOUT_MS,
+		DATABASE_PREPARE: parsed.DATABASE_PREPARE,
 	}
 }
