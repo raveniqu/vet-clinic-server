@@ -170,6 +170,7 @@ Feature-sliced OOP CQRS. Business logic never lives in routes: routes parse, del
 - `db/<table>/schema.sql` + `index.sql` per table are the sole schema source. `owner_addresses` and `owner_consents` reference `owners`, so apply in dependency order (`owners` first); each dependent file carries a `-- Requires:` line. Change flow: edit the table files (+ `db/seed/`) → `bun run db:reset` → `bun run db:types`. No versioned migration CLI yet.
 - **DEV database on the VPS:** one dedicated Postgres compose in Dokploy, described in `docs/adr/0001-dev-database-as-dedicated-compose.md`. DDL is applied **by hand in DBeaver as `dev_user_rw`**, never by a script. Roles and grants live in `db/postgres_user_roles.sql` (run by hand as `root_superuser`; re-run after a restore). The backend connects as `vet_serverapp_rw` (`DATABASE_RW_URL`) and `vet_serverapp_ro` (`DATABASE_RO_URL`); neither is superuser. Backups are manual dumps.
 - **Pending decision:** before first production deploy, adopt a forward-only migration tool (reversible when possible). Until then the per-table `schema.sql` + `index.sql` + reset are local/dev only: never treat them as a prod path.
+- **Startup check:** `index.ts` awaits `waitForDbReady(db)` before `.listen()`: `SELECT 1` on both pools, retried with backoff for up to 30s, plus `db.ro` must report `default_transaction_read_only = on`. On failure: log, `db.destroy()`, `exit(1)`. `app.ts` stays DB-free. Readiness endpoint deferred until the first repository lands.
 - Schema design reflects access patterns. Soft deletes, auditing, versioning only when intentional and documented.
 - Idempotency by design for client-retried writes, webhooks, payments.
 
@@ -202,3 +203,7 @@ Feature-sliced OOP CQRS. Business logic never lives in routes: routes parse, del
   - `routes.test.ts`: in-process `app.handle(new Request(...))` + real Postgres via `withTestTx`.
 - Structure: `describe("<Subject>")` → `describe("<method>")` → `describe("Happy cases")` / `describe("Unhappy cases")`. Use `test(...)` everywhere. No mandatory Arrange/Act/Assert comments; descriptive names + blank-line separation.
 - DB isolation: `withTestTx` opens a transaction on `TEST_DATABASE_URL` (RAM-backed Postgres, port 5433), injects `{ rw: tx, ro: tx }` into `createApp()`, rolls back after each test.
+
+## 10. Git
+
+- **Branch names:** `<type>/<description>` in kebab-case. Allowed types: `feature`, `bugfix`, `hotfix`, `release`, `refactor`, `docs`, `chore`, `build`, `test`, `improve`, `dependency`, `experimental`.
