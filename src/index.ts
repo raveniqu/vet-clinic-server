@@ -2,7 +2,7 @@ import { getLogger } from "@logtape/logtape"
 
 import { createApp } from "src/app"
 import { loadConfig } from "src/shared/config/env"
-import { createDbPools } from "src/shared/db/client"
+import { createDbPools, waitForDbReady } from "src/shared/db/client"
 import { setupLogging } from "src/shared/logger/logtape"
 
 const conf = loadConfig(process.env)
@@ -20,6 +20,14 @@ const db = createDbPools({
 	roStatementTimeoutMs: conf.DB_RO_STATEMENT_TIMEOUT_MS,
 	prepare: conf.DB_PREPARE,
 })
+
+const dbReady = await waitForDbReady(db)
+if (dbReady.isErr()) {
+	logger.error("Database startup check failed: {reason}", { reason: dbReady.error.message })
+	// postgres.js end() waits on in-flight connection retries, so cap it.
+	await Promise.race([db.destroy(), Bun.sleep(2000)])
+	process.exit(1)
+}
 
 const app = createApp({
 	nodeEnv: conf.NODE_ENV,

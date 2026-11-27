@@ -32,7 +32,7 @@ export type AppEnvConfig = {
 }
 
 export function loadConfig(raw: Record<string, string | undefined>): Readonly<AppEnvConfig> {
-	const coerced = Value.Convert(EnvSchema, { ...raw })
+	const coerced = Value.Convert(EnvSchema, Value.Default(EnvSchema, { ...raw }))
 	if (!Value.Check(EnvSchema, coerced)) {
 		const errors = [...Value.Errors(EnvSchema, coerced)].map((e) => `${e.path}: ${e.message}`).join("; ")
 		throw new Error(`Invalid environment configuration: ${errors}`)
