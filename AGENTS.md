@@ -30,7 +30,8 @@ bun run lint         # biome check
 bun run lint:fix
 bun run format
 bunx tsc --noEmit
-bun run test         # bun test --pass-with-no-tests --check
+bun run test         # bun test --pass-with-no-tests --check (skips *.integration.test.ts; fast, Docker-free)
+bun run test:integration  # (not yet in repo) bun test --pass-with-no-tests --check --timeout=30000 integration.test.ts (Testcontainers PG 18)
 bun run db:types     # kysely-codegen -> src/shared/db/generated/db.d.ts
 # (not yet in repo) bun run db:up / db:reset  — recreate dev + test Postgres from db/<table>/schema.sql + index.sql
 ```
@@ -63,15 +64,13 @@ Before declaring work done: `bun run format && bun run lint && bunx tsc --noEmit
 │       └── <feature>/             # e.g. patient/
 │           ├── index.ts           # public facade: wires UoW, repos, services, routes
 │           ├── routes.ts          # thin controller, unwraps Result via .match()
-│           ├── routes.test.ts     # in-process app.handle() + Postgres
+│           ├── routes.test.ts     # in-process app.handle() with typed fakes
 │           ├── contracts.ts       # Elysia `t` input/output schemas
 │           ├── domain/            # *.domain.ts, *.vo.ts, write-repo ports, *.test.ts
 │           ├── use-case/
 │           │   ├── command/       # <action>/<action>.service.ts (+ .test.ts)
 │           │   └── query/         # <name>-read.repo.ts (port) + <action>/<action>.service.ts
-│           └── repository/        # pg-*.repo.ts, pg-*-read.repo.ts (all Kysely lives here)
-└── test/
-    └── setup.ts                   # (not yet in repo) shared DB harness: withTestTx
+│           └── repository/        # pg-*.repo.ts, pg-*-read.repo.ts, *.integration.test.ts (all Kysely lives here)
 ```
 
 ### Dependency rules
@@ -133,7 +132,7 @@ Feature-sliced OOP CQRS. Business logic never lives in routes: routes parse, del
 - Non-`async` functions (repo methods) return `ResultAsync<T, E>`; wrap promises via `ResultAsync.fromPromise(promise, mapError)`.
 - Every repo method, inside or outside a tx, returns `ResultAsync` via `ResultAsync.fromPromise(query, mapPgError)`. Inside `KyselyUnitOfWork.run(...)`, returning `err(...)` triggers internal `RollbackSignal` → rollback. Do not switch to a throwing dialect inside transactions.
 - Branching: `await` each fallible `Result`, branch flat (`if / else if / else` or early `return err(...)`). Never mix sync `err(...)` and `ResultAsync` returns in one `.andThen()` callback (TS2769). Validate collections with `Result.combine(...)`.
-- Unwrap once at the HTTP edge in `routes.ts` via `.match()`. Canonical error body: `type ErrorResponseBody = { error_message: string }`; no competing shapes. Status: validation → `400`/`422`, not found → `404`, conflict → `409`, unexpected → `500` with `{ error_message: "Internal Server Error" }`.
+- Unwrap once at the HTTP edge in `routes.ts` via `.match()`. Canonical error body: `type ErrorResponseBody = { error_message: string }`; no competing shapes. Status: parse/syntax & wire JSON schema validation → `400`, domain validation → `422`, not found → `404`, conflict → `409`, unexpected → `500` with `{ error_message: "Internal Server Error" }`.
 - `error-plugin.ts` (`onError`) = safety net only for Elysia validation errors, 404s, panics.
 - Log with LogTape at the boundary that handles the error, with context. No silent failures.
 
@@ -143,6 +142,7 @@ Feature-sliced OOP CQRS. Business logic never lives in routes: routes parse, del
 - Always braces on `if`, even short guards (no single-line `if`).
 - Default to Go-style `for...of` for async work, sequential repo calls, `Result` early returns, accumulation. `.map/.filter/.find` OK for concise single-pass stateless transforms. Avoid nested `.reduce()`, complex `.flatMap()`, unbounded `Promise.all()` inside write transactions.
 - No unused variables, no implicit returns.
+- Avoid default parameter values on functions/methods; require callers to pass arguments explicitly so call sites stay clear.
 
 ### `RequestContext` (`ctx`)
 
@@ -155,7 +155,7 @@ Feature-sliced OOP CQRS. Business logic never lives in routes: routes parse, del
 ### Identifiers & tokens
 
 - DB primary keys: `BIGSERIAL` (`int8`), assigned by Postgres. Never generate PKs in app code. `Entity.registerNew(...)` has no `id`; repo `INSERT ... RETURNING id` and the command returns it (RYOW).
-- `int8` arrives from postgres.js / kysely-codegen as `string`, not `number`. Never cast to `number` (precision loss past 2^53). Keep IDs as `string` through domain, DTOs, and `t.String()` contracts; validate path/query IDs with a digits-only pattern.
+- `int8` arrives from postgres.js / kysely-codegen as `string`. Parse `BIGSERIAL` IDs to `number` in repositories with a `Number.isSafeInteger()` guard (fail with an unexpected error if unsafe), and keep IDs as `number` (`integer >= 1`) through domain, DTOs, and HTTP contracts (`t.Integer({ minimum: 1 })`) to match Apidog.
 - Sequential IDs are guessable and leak creation order/volume. Never rely on ID secrecy: enforce authorization on every owner/patient/medical-record lookup.
 - Secret tokens: 32 bytes from `crypto.getRandomValues(new Uint8Array(32))`, `base64url`. Never a sequence/UUIDv7/ULID for secrets. (Opaque `session_id` is a secret token.)
 - Public IDs hiding creation time (only if introduced): `crypto.randomUUID()` (v4) in a separate `UNIQUE` column, not the PK.
@@ -197,12 +197,13 @@ Feature-sliced OOP CQRS. Business logic never lives in routes: routes parse, del
 
 ## 9. Testing (`bun:test`)
 
-- Colocate `*.test.ts` beside unit under test. Shared harness: `test/setup.ts` **(not yet in repo)**.
+- Colocate `*.test.ts` beside unit under test:
   - `domain/<name>.domain.test.ts`, `<name>.vo.test.ts`: pure unit, zero DB, zero mocks.
   - `use-case/.../<action>.service.test.ts`: construct service directly with small typed fakes. `bun:test` `mock()` only for spy assertions. No `vitest`/`vitest-mock-extended`.
-  - `routes.test.ts`: in-process `app.handle(new Request(...))` + real Postgres via `withTestTx`.
+  - `routes.test.ts`: in-process `app.handle(new Request(...))` wired with small typed fakes (covers HTTP routing, TypeBox `400`, domain `422`, conflict `409`, unexpected `500`, headers).
+  - `repository/*.integration.test.ts`: repository + UoW boundary tests against ephemeral Postgres 18 via `@testcontainers/postgresql` (local Docker, ICU `th` collation matching ADR-0001, schema loaded from `db/<table>/schema.sql` + `index.sql`). Run via `bun run test:integration`; excluded from fast `bun run test` via `--path-ignore-patterns='**/*.integration.test.ts'`.
 - Structure: `describe("<Subject>")` → `describe("<method>")` → `describe("Happy cases")` / `describe("Unhappy cases")`. Use `test(...)` everywhere. No mandatory Arrange/Act/Assert comments; descriptive names + blank-line separation.
-- DB isolation: `withTestTx` opens a transaction on `TEST_DATABASE_URL` (RAM-backed Postgres, port 5433), injects `{ rw: tx, ro: tx }` into `createApp()`, rolls back after each test.
+- E2E API regression runs via Apidog against DEV (per `docs/adr/0001-dev-database-as-dedicated-compose.md`).
 
 ## 10. Git
 
