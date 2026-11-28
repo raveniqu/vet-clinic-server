@@ -202,7 +202,7 @@ Feature-sliced OOP CQRS. Business logic never lives in routes: routes parse, del
   - `use-case/.../<action>.service.test.ts`: construct service directly with small typed fakes. `bun:test` `mock()` only for spy assertions. No `vitest`/`vitest-mock-extended`.
   - `routes.test.ts`: in-process `app.handle(new Request(...))` wired with small typed fakes (covers HTTP routing, TypeBox `400`, domain `422`, conflict `409`, unexpected `500`, headers).
   - `repository/*.integration.test.ts`: repository + UoW boundary tests against ephemeral Postgres 18 via `@testcontainers/postgresql` (local Docker, ICU `th` collation matching ADR-0001, schema loaded from `db/<table>/schema.sql` + `index.sql`). Run via `bun run test:integration`; excluded from fast `bun run test` via `--path-ignore-patterns='**/*.integration.test.ts'`.
-- Structure: `describe("<Subject>")` → `describe("<method>")` → `describe("Happy cases")` / `describe("Unhappy cases")`. Use `test(...)` everywhere. No mandatory Arrange/Act/Assert comments; descriptive names + blank-line separation.
+- Structure: `describe("<Subject>")` → `describe("<method>")` → `describe("Happy cases")` / `describe("Unhappy cases")` / `describe("Exception cases")` (`Unhappy cases` = expected validation, domain, or conflict failures; `Exception cases` = thrown exceptions, `UnexpectedError`, infra/crypto/DB failures, and client aborts). Use `test(...)` everywhere. No mandatory Arrange/Act/Assert comments; descriptive names + blank-line separation.
 - E2E API regression runs via Apidog against DEV (per `docs/adr/0001-dev-database-as-dedicated-compose.md`).
 
 ## 10. Git

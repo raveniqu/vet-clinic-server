@@ -325,7 +325,9 @@ describe("POST /api/v1/owners", () => {
 				expect(await response.json()).toEqual({ error_message: message })
 			}
 		})
+	})
 
+	describe("Exception cases", () => {
 		test("returns 500 Internal Server Error without leaking details and logs without PII", async () => {
 			const records: LogRecord[] = []
 			await configure({

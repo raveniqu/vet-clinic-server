@@ -18,7 +18,7 @@ describe("AesGcmTaxIdCipher", () => {
 			})
 		})
 
-		describe("Unhappy cases", () => {
+		describe("Exception cases", () => {
 			test("rejects encryption key not equal to 32 bytes and HMAC key shorter than 32 bytes", () => {
 				expect(() => new AesGcmTaxIdCipher({ encryptionKey: new Uint8Array(31), hmacKey: HMAC_KEY })).toThrow()
 				expect(() => new AesGcmTaxIdCipher({ encryptionKey: new Uint8Array(33), hmacKey: HMAC_KEY })).toThrow()
@@ -59,7 +59,7 @@ describe("AesGcmTaxIdCipher", () => {
 			})
 		})
 
-		describe("Unhappy cases", () => {
+		describe("Exception cases", () => {
 			test("rejects unsupported version prefix, invalid base64, truncated payload, tampered bytes, and wrong key", () => {
 				const cipher = new AesGcmTaxIdCipher({ encryptionKey: ENCRYPTION_KEY, hmacKey: HMAC_KEY })
 				const wrongCipher = new AesGcmTaxIdCipher({ encryptionKey: OTHER_ENCRYPTION_KEY, hmacKey: HMAC_KEY })

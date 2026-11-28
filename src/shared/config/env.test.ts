@@ -41,7 +41,7 @@ describe("loadConfig", () => {
 			})
 		})
 
-		describe("Unhappy cases", () => {
+		describe("Exception cases", () => {
 			test("throws when TAX_ID_ENCRYPTION_KEY or TAX_ID_HMAC_KEY is missing or empty", () => {
 				expect(() => loadConfig(makeRawEnv({ TAX_ID_ENCRYPTION_KEY: undefined }))).toThrow()
 				expect(() => loadConfig(makeRawEnv({ TAX_ID_ENCRYPTION_KEY: "" }))).toThrow()

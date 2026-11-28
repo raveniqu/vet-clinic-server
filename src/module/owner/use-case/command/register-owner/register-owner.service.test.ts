@@ -272,6 +272,37 @@ describe("RegisterOwnerService", () => {
 		})
 
 		describe("Unhappy cases", () => {
+			test("returns DomainValidationError before opening UoW transaction when domain invariants fail", async () => {
+				const { service, state } = createFakeDeps({ nowIso: "2026-11-28T10:00:00.000Z" })
+				const req = makeValidJuristicRequest()
+
+				const result = await service.execute({ signal: new AbortController().signal }, { ...req, consents: { ...req.consents, privacyPolicy: false } })
+
+				expect(result.isErr()).toBe(true)
+				if (result.isErr()) {
+					expect(result.error).toBeInstanceOf(DomainValidationError)
+				}
+				expect(state.uowRuns).toBe(0)
+			})
+
+			test("rolls back and propagates ConflictError when owner repository reports duplicate", async () => {
+				const conflict = new ConflictError("An active owner with this tax_id already exists.", "uniq_owners_tax_id_juristic_live")
+				const { service, state } = createFakeDeps({
+					nowIso: "2026-11-28T10:00:00.000Z",
+					createOwnerResult: errAsync(conflict),
+				})
+
+				const result = await service.execute({ signal: new AbortController().signal }, makeValidJuristicRequest())
+
+				expect(result.isErr()).toBe(true)
+				if (result.isErr()) {
+					expect(result.error).toBe(conflict)
+				}
+				expect(state.rolledBack).toBe(1)
+			})
+		})
+
+		describe("Exception cases", () => {
 			test("fails before opening UoW transaction when RequestContext.signal is aborted", async () => {
 				const controller = new AbortController()
 				controller.abort("client disconnected")
@@ -282,19 +313,6 @@ describe("RegisterOwnerService", () => {
 				expect(result.isErr()).toBe(true)
 				if (result.isErr()) {
 					expect(result.error).toBeInstanceOf(RequestAbortedError)
-				}
-				expect(state.uowRuns).toBe(0)
-			})
-
-			test("returns DomainValidationError before opening UoW transaction when domain invariants fail", async () => {
-				const { service, state } = createFakeDeps({ nowIso: "2026-11-28T10:00:00.000Z" })
-				const req = makeValidJuristicRequest()
-
-				const result = await service.execute({ signal: new AbortController().signal }, { ...req, consents: { ...req.consents, privacyPolicy: false } })
-
-				expect(result.isErr()).toBe(true)
-				if (result.isErr()) {
-					expect(result.error).toBeInstanceOf(DomainValidationError)
 				}
 				expect(state.uowRuns).toBe(0)
 			})
@@ -330,22 +348,6 @@ describe("RegisterOwnerService", () => {
 				}
 				expect(state.rolledBack).toBe(1)
 				expect(state.createdOwner).toBeNull()
-			})
-
-			test("rolls back and propagates ConflictError when owner repository reports duplicate", async () => {
-				const conflict = new ConflictError("An active owner with this tax_id already exists.", "uniq_owners_tax_id_juristic_live")
-				const { service, state } = createFakeDeps({
-					nowIso: "2026-11-28T10:00:00.000Z",
-					createOwnerResult: errAsync(conflict),
-				})
-
-				const result = await service.execute({ signal: new AbortController().signal }, makeValidJuristicRequest())
-
-				expect(result.isErr()).toBe(true)
-				if (result.isErr()) {
-					expect(result.error).toBe(conflict)
-				}
-				expect(state.rolledBack).toBe(1)
 			})
 		})
 	})

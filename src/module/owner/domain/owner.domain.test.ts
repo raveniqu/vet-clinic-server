@@ -276,7 +276,7 @@ describe("Owner", () => {
 				}
 			})
 
-			test("propagates address, consent, and TaxIdCipher errors", () => {
+			test("propagates address and consent domain errors", () => {
 				const { cipher } = createFakeCipher()
 				const deps = { taxIdCipher: cipher, todayBangkokIso: TODAY_BANGKOK_ISO }
 				const input = makeValidJuristicInput()
@@ -308,7 +308,11 @@ describe("Owner", () => {
 					expect(bothDefault.error).toBeInstanceOf(DomainValidationError)
 					expect(bothDefault.error.message).toBe("Only one address may be marked as default.")
 				}
+			})
+		})
 
+		describe("Exception cases", () => {
+			test("propagates UnexpectedError when TaxIdCipher encrypt or hash fails", () => {
 				const encryptFailure = new UnexpectedError("encrypt boom", new Error("crypto"))
 				const { cipher: failingEncryptCipher } = createFakeCipher({
 					encrypt: () => err(encryptFailure),

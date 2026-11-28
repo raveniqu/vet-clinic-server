@@ -384,7 +384,9 @@ describe("PgOwnerRepository & PgRunningNumberSequenceRepository (Postgres integr
 				expect(row?.code).toBe("OWN-20261128-0002")
 			}
 		})
+	})
 
+	describe("Exception cases", () => {
 		test("rolls back sequence, owner, address, and consent rows when transaction returns err after writes", async () => {
 			const uow = new KyselyUnitOfWork<OwnerUnitOfWorkRepos>(pg.db, (tx) => ({
 				owners: new PgOwnerRepository(tx),
