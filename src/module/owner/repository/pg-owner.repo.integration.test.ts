@@ -4,8 +4,14 @@ import { err } from "neverthrow"
 
 import { ConflictError, UnexpectedError } from "src/core/errors"
 import type { RequestContext } from "src/core/request-context"
+import { AesGcmTaxIdCipher } from "src/module/owner/aes-gcm-tax-id-cipher"
 import type { OwnerUnitOfWorkRepos } from "src/module/owner/domain/owner.repo"
-import { type Clock, type RegisterOwnerRequest, RegisterOwnerService } from "src/module/owner/use-case/command/register-owner/register-owner.service"
+import {
+	type Clock,
+	type RegisterIndividualOwnerRequest,
+	type RegisterJuristicOwnerRequest,
+	RegisterOwnerService,
+} from "src/module/owner/use-case/command/register-owner/register-owner.service"
 import { KyselyUnitOfWork } from "src/shared/db/kysely-uow"
 import { type TestPostgres, startTestPostgres } from "src/shared/db/pg-testcontainer"
 import { PgOwnerRepository } from "./pg-owner.repo"
@@ -13,16 +19,20 @@ import { PgRunningNumberSequenceRepository } from "./pg-running-number-sequence.
 
 let pg: TestPostgres
 
+const TEST_ENCRYPTION_KEY = new Uint8Array(32).fill(0x11)
+const TEST_HMAC_KEY = new Uint8Array(32).fill(0x22)
+const cipher = new AesGcmTaxIdCipher({ encryptionKey: TEST_ENCRYPTION_KEY, hmacKey: TEST_HMAC_KEY })
+
 function createService(nowIso: string) {
 	const uow = new KyselyUnitOfWork<OwnerUnitOfWorkRepos>(pg.db, (tx) => ({
 		owners: new PgOwnerRepository(tx),
 		sequences: new PgRunningNumberSequenceRepository(tx),
 	}))
 	const clock: Clock = { now: () => new Date(nowIso) }
-	return new RegisterOwnerService(uow, clock)
+	return new RegisterOwnerService(uow, clock, cipher)
 }
 
-function makeRequest(overrides: Partial<RegisterOwnerRequest>): RegisterOwnerRequest {
+function makeJuristicRequest(overrides: Partial<RegisterJuristicOwnerRequest>): RegisterJuristicOwnerRequest {
 	return {
 		type: "JURISTIC",
 		prefix: "COMMERCIAL",
@@ -53,6 +63,40 @@ function makeRequest(overrides: Partial<RegisterOwnerRequest>): RegisterOwnerReq
 	}
 }
 
+function makeIndividualRequest(overrides: Partial<RegisterIndividualOwnerRequest>): RegisterIndividualOwnerRequest {
+	return {
+		type: "INDIVIDUAL",
+		prefix: "MR",
+		firstName: "เอกนิติ",
+		lastName: "เลี้ยงหมา",
+		taxId: "8627480061811",
+		dateOfBirth: "1990-05-15",
+		gender: "MALE",
+		phoneNo: "0921874669",
+		email: "Ekanit@Example.COM",
+		lineId: "ekanit.line",
+		acquisitionChannel: "WALK_IN",
+		addresses: {
+			residential: {
+				addressLine: "88/12 ซอยสุขุมวิท 55",
+				subdistrict: "คลองตันเหนือ",
+				district: "วัฒนา",
+				province: "กรุงเทพมหานคร",
+				postalCode: "10110",
+			},
+			billing: null,
+		},
+		consents: {
+			privacyPolicy: true,
+			marketing: true,
+			appointment: false,
+			media: false,
+			research: false,
+		},
+		...overrides,
+	}
+}
+
 function makeCtx(): RequestContext {
 	return { signal: new AbortController().signal }
 }
@@ -76,7 +120,7 @@ describe("PgOwnerRepository & PgRunningNumberSequenceRepository (Postgres integr
 		test("commits JURISTIC owner, default residential address, and 5 PDPA consents with shared timestamp", async () => {
 			const service = createService("2026-11-28T10:00:00.000Z")
 
-			const res = await service.execute(makeCtx(), makeRequest({}))
+			const res = await service.execute(makeCtx(), makeJuristicRequest({}))
 
 			expect(res.isOk()).toBe(true)
 			if (res.isOk()) {
@@ -113,12 +157,52 @@ describe("PgOwnerRepository & PgRunningNumberSequenceRepository (Postgres integr
 			}
 		})
 
+		test("commits INDIVIDUAL owner with encrypted tax_id, HMAC-SHA256 tax_id_hash, personal fields, address, and 5 consents", async () => {
+			const service = createService("2026-11-28T10:00:00.000Z")
+
+			const res = await service.execute(makeCtx(), makeIndividualRequest({}))
+
+			expect(res.isOk()).toBe(true)
+			if (res.isOk()) {
+				const row = await pg.db.selectFrom("owners").selectAll().where("id", "=", String(res.value.id)).executeTakeFirstOrThrow()
+				expect(row.code).toBe("OWN-20261128-0001")
+				expect(row.type).toBe("INDIVIDUAL")
+				expect(row.prefix).toBe("MR")
+				expect(row.first_name).toBe("เอกนิติ")
+				expect(row.last_name).toBe("เลี้ยงหมา")
+				expect(row.gender).toBe("MALE")
+				expect(row.email).toBe("ekanit@example.com")
+				expect(row.date_of_birth).toBeInstanceOf(Date)
+				expect(row.date_of_birth?.toISOString().slice(0, 10)).toBe("1990-05-15")
+
+				expect(row.tax_id).not.toBe("8627480061811")
+				expect(row.tax_id.startsWith("v1:")).toBe(true)
+				const decrypted = cipher.decrypt(row.tax_id)
+				expect(decrypted.isOk()).toBe(true)
+				if (decrypted.isOk()) {
+					expect(decrypted.value).toBe("8627480061811")
+				}
+
+				const expectedHash = cipher.hash("8627480061811")
+				expect(expectedHash.isOk()).toBe(true)
+				if (expectedHash.isOk()) {
+					expect(row.tax_id_hash).toBe(expectedHash.value)
+					expect(row.tax_id_hash).toMatch(/^[0-9a-f]{64}$/)
+				}
+
+				const addressRows = await pg.db.selectFrom("owner_addresses").selectAll().where("owner_id", "=", String(res.value.id)).execute()
+				expect(addressRows).toHaveLength(1)
+				const consentRows = await pg.db.selectFrom("owner_consents").selectAll().where("owner_id", "=", String(res.value.id)).execute()
+				expect(consentRows).toHaveLength(5)
+			}
+		})
+
 		test("persists both residential and billing addresses with billing marked default", async () => {
 			const service = createService("2026-11-28T10:00:00.000Z")
 
 			const res = await service.execute(
 				makeCtx(),
-				makeRequest({
+				makeJuristicRequest({
 					addresses: {
 						residential: {
 							isDefault: false,
@@ -158,7 +242,7 @@ describe("PgOwnerRepository & PgRunningNumberSequenceRepository (Postgres integr
 				[1, 2, 3, 4, 5].map((n) =>
 					service.execute(
 						makeCtx(),
-						makeRequest({
+						makeJuristicRequest({
 							taxId: `021556800509${n}`,
 							phoneNo: `087095712${n}`,
 							email: `owner${n}@siampet.co.th`,
@@ -176,49 +260,101 @@ describe("PgOwnerRepository & PgRunningNumberSequenceRepository (Postgres integr
 			expect(rows.map((r) => r.code)).toEqual(["OWN-20261128-0001", "OWN-20261128-0002", "OWN-20261128-0003", "OWN-20261128-0004", "OWN-20261128-0005"])
 		})
 
-		test("allows re-registration using tax_id, phone_no, email, and line_id of a soft-deleted owner", async () => {
+		test("allows re-registration using tax_id, phone_no, email, and line_id of a soft-deleted owner (both JURISTIC and INDIVIDUAL)", async () => {
 			const service = createService("2026-11-28T10:00:00.000Z")
 
-			const first = await service.execute(makeCtx(), makeRequest({}))
-			expect(first.isOk()).toBe(true)
-			if (first.isOk()) {
-				await pg.db.updateTable("owners").set({ deleted_at: sql`NOW()` }).where("id", "=", String(first.value.id)).execute()
+			const firstJuristic = await service.execute(makeCtx(), makeJuristicRequest({}))
+			expect(firstJuristic.isOk()).toBe(true)
+			if (firstJuristic.isOk()) {
+				await pg.db.updateTable("owners").set({ deleted_at: sql`NOW()` }).where("id", "=", String(firstJuristic.value.id)).execute()
 			}
 
-			const second = await service.execute(makeCtx(), makeRequest({}))
-			expect(second.isOk()).toBe(true)
-			if (first.isOk() && second.isOk()) {
-				expect(second.value.id).not.toBe(first.value.id)
+			const secondJuristic = await service.execute(makeCtx(), makeJuristicRequest({}))
+			expect(secondJuristic.isOk()).toBe(true)
+			if (firstJuristic.isOk() && secondJuristic.isOk()) {
+				expect(secondJuristic.value.id).not.toBe(firstJuristic.value.id)
+			}
+
+			const firstIndividual = await service.execute(makeCtx(), makeIndividualRequest({}))
+			expect(firstIndividual.isOk()).toBe(true)
+			if (firstIndividual.isOk()) {
+				await pg.db.updateTable("owners").set({ deleted_at: sql`NOW()` }).where("id", "=", String(firstIndividual.value.id)).execute()
+			}
+
+			const secondIndividual = await service.execute(makeCtx(), makeIndividualRequest({}))
+			expect(secondIndividual.isOk()).toBe(true)
+			if (firstIndividual.isOk() && secondIndividual.isOk()) {
+				expect(secondIndividual.value.id).not.toBe(firstIndividual.value.id)
+				const firstRow = await pg.db.selectFrom("owners").select(["tax_id", "tax_id_hash"]).where("id", "=", String(firstIndividual.value.id)).executeTakeFirstOrThrow()
+				const secondRow = await pg.db.selectFrom("owners").select(["tax_id", "tax_id_hash"]).where("id", "=", String(secondIndividual.value.id)).executeTakeFirstOrThrow()
+				expect(secondRow.tax_id).not.toBe(firstRow.tax_id)
+				expect(secondRow.tax_id_hash).toBe(firstRow.tax_id_hash)
 			}
 		})
 	})
 
 	describe("Unhappy cases", () => {
-		test("maps duplicate active tax_id, phone_no, email (case-insensitive), and line_id to 409 messages and rolls back sequence increment", async () => {
+		test("maps duplicate active tax_id (INDIVIDUAL blind index) to 409 and rolls back sequence increment", async () => {
 			const service = createService("2026-11-28T10:00:00.000Z")
 
-			const initial = await service.execute(makeCtx(), makeRequest({}))
+			const initial = await service.execute(makeCtx(), makeIndividualRequest({}))
+			expect(initial.isOk()).toBe(true)
+
+			const duplicateTaxId = await service.execute(
+				makeCtx(),
+				makeIndividualRequest({
+					phoneNo: "0890000001",
+					email: "other@example.com",
+					lineId: "other.line",
+				})
+			)
+			expect(duplicateTaxId.isErr()).toBe(true)
+			if (duplicateTaxId.isErr()) {
+				expect(duplicateTaxId.error).toBeInstanceOf(ConflictError)
+				expect(duplicateTaxId.error.message).toBe("An active owner with this tax_id already exists.")
+			}
+
+			const nextValid = await service.execute(
+				makeCtx(),
+				makeIndividualRequest({
+					taxId: "8627480061812",
+					phoneNo: "0890000002",
+					email: "next@example.com",
+					lineId: "next.line",
+				})
+			)
+			expect(nextValid.isOk()).toBe(true)
+			if (nextValid.isOk()) {
+				const row = await pg.db.selectFrom("owners").select(["code"]).where("id", "=", String(nextValid.value.id)).executeTakeFirst()
+				expect(row?.code).toBe("OWN-20261128-0002")
+			}
+		})
+
+		test("maps duplicate active tax_id (JURISTIC), phone_no, email (case-insensitive), and line_id to 409 messages and rolls back sequence increment", async () => {
+			const service = createService("2026-11-28T10:00:00.000Z")
+
+			const initial = await service.execute(makeCtx(), makeJuristicRequest({}))
 			expect(initial.isOk()).toBe(true)
 
 			const cases = [
 				{
 					label: "tax_id",
-					req: makeRequest({ taxId: "0215568005093", phoneNo: "0890000001", email: "other1@example.com", lineId: "other.1" }),
+					req: makeJuristicRequest({ taxId: "0215568005093", phoneNo: "0890000001", email: "other1@example.com", lineId: "other.1" }),
 					expectedMessage: "An active owner with this tax_id already exists.",
 				},
 				{
 					label: "phone_no",
-					req: makeRequest({ taxId: "0215568005099", phoneNo: "0870957124", email: "other2@example.com", lineId: "other.2" }),
+					req: makeJuristicRequest({ taxId: "0215568005099", phoneNo: "0870957124", email: "other2@example.com", lineId: "other.2" }),
 					expectedMessage: "An active owner with this phone_no already exists.",
 				},
 				{
 					label: "email",
-					req: makeRequest({ taxId: "0215568005098", phoneNo: "0890000003", email: "admin@siampet.co.th", lineId: "other.3" }),
+					req: makeJuristicRequest({ taxId: "0215568005098", phoneNo: "0890000003", email: "admin@siampet.co.th", lineId: "other.3" }),
 					expectedMessage: "An active owner with this email already exists.",
 				},
 				{
 					label: "line_id",
-					req: makeRequest({ taxId: "0215568005097", phoneNo: "0890000004", email: "other4@example.com", lineId: "siampet.line" }),
+					req: makeJuristicRequest({ taxId: "0215568005097", phoneNo: "0890000004", email: "other4@example.com", lineId: "siampet.line" }),
 					expectedMessage: "An active owner with this line_id already exists.",
 				},
 			] as const
@@ -235,7 +371,7 @@ describe("PgOwnerRepository & PgRunningNumberSequenceRepository (Postgres integr
 			// Verify sequence rolled back on all 4 conflicts: next valid registration gets 0002, not 0006
 			const nextValid = await service.execute(
 				makeCtx(),
-				makeRequest({
+				makeJuristicRequest({
 					taxId: "0215568005096",
 					phoneNo: "0890000005",
 					email: "next@example.com",
@@ -248,7 +384,9 @@ describe("PgOwnerRepository & PgRunningNumberSequenceRepository (Postgres integr
 				expect(row?.code).toBe("OWN-20261128-0002")
 			}
 		})
+	})
 
+	describe("Exception cases", () => {
 		test("rolls back sequence, owner, address, and consent rows when transaction returns err after writes", async () => {
 			const uow = new KyselyUnitOfWork<OwnerUnitOfWorkRepos>(pg.db, (tx) => ({
 				owners: new PgOwnerRepository(tx),

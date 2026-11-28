@@ -4,7 +4,7 @@ import { Elysia } from "elysia"
 import { ConflictError, DomainValidationError, RequestAbortedError } from "src/core/errors"
 import { newAuthPlugin } from "src/shared/http/auth-plugin"
 import type { ErrorResponseBody } from "src/shared/http/error-plugin"
-import { type RegisterJuristicOwnerBody, RegisterJuristicOwnerBodySchema, type RegisterOwnerResponse } from "./contracts"
+import { type RegisterOwnerBody, RegisterOwnerBodySchema, type RegisterOwnerResponse } from "./contracts"
 import type { RegisterOwnerRequest, RegisterOwnerUseCase } from "./use-case/command/register-owner/register-owner.service"
 
 type OwnerRoutesDeps = {
@@ -13,10 +13,8 @@ type OwnerRoutesDeps = {
 
 const logger = getLogger(["app", "owner"])
 
-function toRegisterOwnerRequest(body: RegisterJuristicOwnerBody): RegisterOwnerRequest {
-	return {
-		type: body.type,
-		prefix: body.prefix,
+function toRegisterOwnerRequest(body: RegisterOwnerBody): RegisterOwnerRequest {
+	const common = {
 		firstName: body.first_name,
 		taxId: body.tax_id,
 		phoneNo: body.phone_no,
@@ -51,6 +49,23 @@ function toRegisterOwnerRequest(body: RegisterJuristicOwnerBody): RegisterOwnerR
 			media: body.consents.media,
 			research: body.consents.research,
 		},
+	}
+
+	if (body.type === "INDIVIDUAL") {
+		return {
+			...common,
+			type: body.type,
+			prefix: body.prefix,
+			lastName: body.last_name,
+			dateOfBirth: body.date_of_birth,
+			gender: body.gender,
+		}
+	}
+
+	return {
+		...common,
+		type: body.type,
+		prefix: body.prefix,
 	}
 }
 
@@ -90,7 +105,7 @@ export function createOwnerRoutes(deps: OwnerRoutesDeps) {
 				}
 			)
 		},
-		{ body: RegisterJuristicOwnerBodySchema }
+		{ body: RegisterOwnerBodySchema }
 	)
 }
 

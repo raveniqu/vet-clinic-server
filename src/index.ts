@@ -33,6 +33,8 @@ if (dbReady.isErr()) {
 const ownerModule = createOwnerModule({
 	rwDb: db.rw,
 	clock: { now: () => new Date() },
+	taxIdEncryptionKey: conf.TAX_ID_ENCRYPTION_KEY,
+	taxIdHmacKey: conf.TAX_ID_HMAC_KEY,
 })
 
 const app = createApp({

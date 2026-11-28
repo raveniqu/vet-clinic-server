@@ -7,7 +7,7 @@ date: 2026-11-28
 
 Individual owners' 13-digit `tax_id` (Thai National ID) is PII stored encrypted in `owners.tax_id` using `AES-256-GCM` with a random 12-byte IV per write, formatted as `v1:<base64(12B-iv || 16B-authTag || ciphertext)>`. Uniqueness and exact-match search on individual `tax_id` use a deterministic `HMAC-SHA256` blind index stored as lowercase 64-char hex in `owners.tax_id_hash` (indexed by `uniq_owners_tax_id_hash_live`). Juristic owners' 13-digit registration number is public corporate data, stored plaintext in `owners.tax_id` with `tax_id_hash = NULL` (indexed by `uniq_owners_tax_id_juristic_live`).
 
-Key material is split into two separate base64 environment secrets validated at startup in `src/shared/config/env.ts`: `TAX_ID_ENCRYPTION_KEY` (exact 32 decoded bytes) and `TAX_ID_HMAC_KEY` (at least 32 decoded bytes).
+Key material is split into two separate hex environment secrets validated at startup in `src/shared/config/env.ts`: `TAX_ID_ENCRYPTION_KEY` (exact 32 decoded bytes / 64 hex chars) and `TAX_ID_HMAC_KEY` (at least 32 decoded bytes / >= 64 hex chars).
 
 ## Considered options
 

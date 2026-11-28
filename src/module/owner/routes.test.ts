@@ -9,10 +9,11 @@ import type { RequestContext } from "src/core/request-context"
 import type { UnitOfWork } from "src/core/unit-of-work"
 import type { ErrorResponseBody } from "src/shared/http/error-plugin"
 import type { OwnerUnitOfWorkRepos } from "./domain/owner.repo"
+import type { TaxIdCipher } from "./domain/tax-id-cipher"
 import { createOwnerRoutes } from "./routes"
 import { type RegisterOwnerRequest, type RegisterOwnerResult, RegisterOwnerService, type RegisterOwnerUseCase } from "./use-case/command/register-owner/register-owner.service"
 
-function makeValidPayload() {
+function makeValidJuristicPayload() {
 	return {
 		type: "JURISTIC",
 		prefix: "COMMERCIAL",
@@ -43,6 +44,40 @@ function makeValidPayload() {
 	}
 }
 
+function makeValidIndividualPayload() {
+	return {
+		type: "INDIVIDUAL",
+		prefix: "MR",
+		first_name: "เอกนิติ",
+		last_name: "เลี้ยงหมา",
+		tax_id: "8627480061811",
+		date_of_birth: "1990-05-15",
+		gender: "MALE",
+		phone_no: "0921874669",
+		email: "QATest001@Example.COM",
+		line_id: "a.line",
+		acquisition_channel: "WALK_IN",
+		addresses: {
+			residential: {
+				is_default: true,
+				address_line: "88/12 ซอยสุขุมวิท 55",
+				subdistrict: "คลองตันเหนือ",
+				district: "วัฒนา",
+				province: "กรุงเทพมหานคร",
+				postal_code: "10110",
+			},
+			billing: null,
+		},
+		consents: {
+			privacy_policy: true,
+			marketing: true,
+			appointment: false,
+			media: false,
+			research: false,
+		},
+	}
+}
+
 function createFakeApp(service: RegisterOwnerUseCase) {
 	return createApp({
 		nodeEnv: "development",
@@ -62,7 +97,12 @@ function createInMemoryServiceApp() {
 			})
 		},
 	}
-	const service = new RegisterOwnerService(uow, { now: () => new Date("2026-11-28T10:00:00.000Z") })
+	const fakeCipher: TaxIdCipher = {
+		encrypt: (plainTaxId: string) => ok(`v1:enc:${plainTaxId}`),
+		decrypt: (encryptedTaxId: string) => ok(encryptedTaxId.replace(/^v1:enc:/, "")),
+		hash: (plainTaxId: string) => ok(`hash:${plainTaxId}`.padEnd(64, "0")),
+	}
+	const service = new RegisterOwnerService(uow, { now: () => new Date("2026-11-28T10:00:00.000Z") }, fakeCipher)
 	return { app: createFakeApp(service), getUowRuns: () => uowRuns }
 }
 
@@ -88,7 +128,7 @@ describe("POST /api/v1/owners", () => {
 				},
 			})
 
-			const response = await postOwners(app, makeValidPayload())
+			const response = await postOwners(app, makeValidJuristicPayload())
 
 			expect(response.status).toBe(201)
 			expect(response.headers.get("location")).toBe("/api/v1/owners/42")
@@ -98,9 +138,21 @@ describe("POST /api/v1/owners", () => {
 			expect(capturedRequest).not.toBeNull()
 		})
 
+		test("returns 201 Created with { id }, Location header, and security headers for valid INDIVIDUAL payload", async () => {
+			const { app } = createInMemoryServiceApp()
+
+			const response = await postOwners(app, makeValidIndividualPayload())
+
+			expect(response.status).toBe(201)
+			expect(response.headers.get("location")).toBe("/api/v1/owners/42")
+			expect(response.headers.get("x-content-type-options")).toBe("nosniff")
+			expect(response.headers.get("cache-control")).toBe("no-store")
+			expect(await response.json()).toEqual({ id: 42 })
+		})
+
 		test("accepts billing address with is_default: true and omitted/null optional fields", async () => {
 			const { app } = createInMemoryServiceApp()
-			const payload = makeValidPayload()
+			const payload = makeValidJuristicPayload()
 			const withBilling = {
 				...payload,
 				email: undefined,
@@ -143,9 +195,9 @@ describe("POST /api/v1/owners", () => {
 			expect(typeof body.error_message).toBe("string")
 		})
 
-		test("returns 400 Bad Request on unknown fields or disallowed personal fields (last_name, date_of_birth, gender)", async () => {
+		test("returns 400 Bad Request on unknown fields or disallowed personal fields (last_name, date_of_birth, gender) on JURISTIC", async () => {
 			const { app } = createInMemoryServiceApp()
-			const base = makeValidPayload()
+			const base = makeValidJuristicPayload()
 
 			for (const badPayload of [
 				{ ...base, unknown_field: "nope" },
@@ -165,10 +217,11 @@ describe("POST /api/v1/owners", () => {
 
 		test("returns 400 Bad Request on invalid type, enum, tax_id, email syntax, length bounds, or missing addresses.residential", async () => {
 			const { app } = createInMemoryServiceApp()
-			const base = makeValidPayload()
+			const base = makeValidJuristicPayload()
 
 			for (const badPayload of [
 				{ ...base, type: "INDIVIDUAL" },
+				{ ...base, type: "OTHER" },
 				{ ...base, prefix: "MR" },
 				{ ...base, acquisition_channel: "INSTAGRAM" },
 				{ ...base, tax_id: "12345" },
@@ -188,9 +241,36 @@ describe("POST /api/v1/owners", () => {
 			}
 		})
 
-		test("returns 422 Unprocessable Content on domain invariant violations", async () => {
+		test("returns 400 Bad Request on invalid INDIVIDUAL wire payloads (missing personal fields, juristic prefix, invalid gender, malformed date_of_birth, unknown field)", async () => {
 			const { app } = createInMemoryServiceApp()
-			const base = makeValidPayload()
+			const base = makeValidIndividualPayload()
+			const { last_name: _ln, ...withoutLastName } = base
+			const { date_of_birth: _dob, ...withoutDob } = base
+			const { gender: _g, ...withoutGender } = base
+
+			for (const badPayload of [
+				withoutLastName,
+				withoutDob,
+				withoutGender,
+				{ ...base, prefix: "COMMERCIAL" },
+				{ ...base, gender: "UNKNOWN" },
+				{ ...base, date_of_birth: "1990/05/15" },
+				{ ...base, date_of_birth: "15-05-1990" },
+				{ ...base, last_name: "" },
+				{ ...base, last_name: "a".repeat(101) },
+				{ ...base, unknown_field: true },
+			]) {
+				const response = await postOwners(app, badPayload)
+				expect(response.status).toBe(400)
+				const body = (await response.json()) as ErrorResponseBody
+				expect(typeof body.error_message).toBe("string")
+			}
+		})
+
+		test("returns 422 Unprocessable Content on domain invariant violations (including impossible calendar and future date_of_birth)", async () => {
+			const { app } = createInMemoryServiceApp()
+			const base = makeValidJuristicPayload()
+			const individual = makeValidIndividualPayload()
 
 			const privacyFalse = await postOwners(app, { ...base, consents: { ...base.consents, privacy_policy: false } })
 			expect(privacyFalse.status).toBe(422)
@@ -213,6 +293,9 @@ describe("POST /api/v1/owners", () => {
 				{ ...base, email: "   " },
 				{ ...base, line_id: "" },
 				{ ...base, line_id: "   " },
+				{ ...individual, last_name: "   " },
+				{ ...individual, date_of_birth: "2026-02-30" },
+				{ ...individual, date_of_birth: "2026-11-29" },
 			]) {
 				const response = await postOwners(app, badPayload)
 				expect(response.status).toBe(422)
@@ -236,13 +319,15 @@ describe("POST /api/v1/owners", () => {
 					},
 				})
 
-				const response = await postOwners(app, makeValidPayload())
+				const response = await postOwners(app, makeValidJuristicPayload())
 
 				expect(response.status).toBe(409)
 				expect(await response.json()).toEqual({ error_message: message })
 			}
 		})
+	})
 
+	describe("Exception cases", () => {
 		test("returns 500 Internal Server Error without leaking details and logs without PII", async () => {
 			const records: LogRecord[] = []
 			await configure({
@@ -263,7 +348,7 @@ describe("POST /api/v1/owners", () => {
 					},
 				})
 
-				const response = await postOwners(app, makeValidPayload())
+				const response = await postOwners(app, makeValidJuristicPayload())
 
 				expect(response.status).toBe(500)
 				expect(response.headers.get("x-content-type-options")).toBe("nosniff")
@@ -293,7 +378,7 @@ describe("POST /api/v1/owners", () => {
 				const controller = new AbortController()
 				controller.abort("client closed")
 
-				const response = await postOwners(app, makeValidPayload(), controller.signal)
+				const response = await postOwners(app, makeValidJuristicPayload(), controller.signal)
 
 				expect(response.status).toBe(499)
 				expect(await response.json()).toEqual({ error_message: "Client disconnected" })
