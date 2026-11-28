@@ -294,7 +294,7 @@ describe("PgOwnerRepository & PgRunningNumberSequenceRepository (Postgres integr
 	})
 
 	describe("Unhappy cases", () => {
-		test("maps duplicate active tax_id (INDIVIDUAL blind index), phone_no, email (case-insensitive), and line_id to 409 and rolls back sequence increment", async () => {
+		test("maps duplicate active tax_id (INDIVIDUAL blind index) to 409 and rolls back sequence increment", async () => {
 			const service = createService("2026-11-28T10:00:00.000Z")
 
 			const initial = await service.execute(makeCtx(), makeIndividualRequest({}))

@@ -115,6 +115,7 @@ export class Owner {
 	readonly prefix: OwnerPrefix
 	readonly firstName: string
 	readonly lastName: string | null
+	/** Stored form: plaintext 13-digit Tax ID for JURISTIC; v1: AES-256-GCM ciphertext for INDIVIDUAL (ADR-0002). */
 	readonly taxId: string
 	readonly taxIdHash: string | null
 	readonly dateOfBirth: string | null
