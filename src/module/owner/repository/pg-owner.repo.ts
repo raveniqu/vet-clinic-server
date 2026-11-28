@@ -9,6 +9,7 @@ import type { DB } from "src/shared/db/generated/db"
 import { parseSafePositiveInt8 } from "./pg-int8"
 
 const OWNER_CONFLICT_MESSAGES: Record<string, string> = {
+	uniq_owners_tax_id_hash_live: "An active owner with this tax_id already exists.",
 	uniq_owners_tax_id_juristic_live: "An active owner with this tax_id already exists.",
 	uniq_owners_phone_no_live: "An active owner with this phone_no already exists.",
 	uniq_owners_email_live: "An active owner with this email already exists.",

@@ -14,7 +14,22 @@ const EnvSchema = Type.Object({
 	DATABASE_RW_STATEMENT_TIMEOUT_MS: Type.Number({ default: 10000, minimum: 100 }),
 	DATABASE_RO_STATEMENT_TIMEOUT_MS: Type.Number({ default: 5000, minimum: 100 }),
 	DATABASE_PREPARE: Type.Boolean({ default: true }),
+	TAX_ID_ENCRYPTION_KEY: Type.String({ minLength: 1 }),
+	TAX_ID_HMAC_KEY: Type.String({ minLength: 1 }),
 })
+
+const STRICT_BASE64_PATTERN = /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/
+
+function decodeStrictBase64Key(raw: string, varName: string): Uint8Array {
+	if (!STRICT_BASE64_PATTERN.test(raw)) {
+		throw new Error(`Invalid environment configuration: /${varName}: must be valid canonical base64`)
+	}
+	const decoded = Buffer.from(raw, "base64")
+	if (decoded.toString("base64") !== raw) {
+		throw new Error(`Invalid environment configuration: /${varName}: must be valid canonical base64`)
+	}
+	return new Uint8Array(decoded)
+}
 
 export type AppEnvConfig = {
 	readonly NODE_ENV: Static<typeof EnvSchema>["NODE_ENV"]
@@ -29,6 +44,8 @@ export type AppEnvConfig = {
 	readonly DATABASE_RW_STATEMENT_TIMEOUT_MS: number
 	readonly DATABASE_RO_STATEMENT_TIMEOUT_MS: number
 	readonly DATABASE_PREPARE: boolean
+	readonly TAX_ID_ENCRYPTION_KEY: Uint8Array
+	readonly TAX_ID_HMAC_KEY: Uint8Array
 }
 
 export function loadConfig(raw: Record<string, string | undefined>): Readonly<AppEnvConfig> {
@@ -41,6 +58,16 @@ export function loadConfig(raw: Record<string, string | undefined>): Readonly<Ap
 	const origins = parsed.CORS_ORIGINS.split(",")
 		.map((o) => o.trim())
 		.filter((o) => o.length > 0)
+
+	const taxIdEncryptionKey = decodeStrictBase64Key(parsed.TAX_ID_ENCRYPTION_KEY, "TAX_ID_ENCRYPTION_KEY")
+	if (taxIdEncryptionKey.byteLength !== 32) {
+		throw new Error(`Invalid environment configuration: /TAX_ID_ENCRYPTION_KEY: expected 32 decoded bytes, got ${taxIdEncryptionKey.byteLength}`)
+	}
+
+	const taxIdHmacKey = decodeStrictBase64Key(parsed.TAX_ID_HMAC_KEY, "TAX_ID_HMAC_KEY")
+	if (taxIdHmacKey.byteLength < 32) {
+		throw new Error(`Invalid environment configuration: /TAX_ID_HMAC_KEY: expected at least 32 decoded bytes, got ${taxIdHmacKey.byteLength}`)
+	}
 
 	return {
 		NODE_ENV: parsed.NODE_ENV,
@@ -55,5 +82,7 @@ export function loadConfig(raw: Record<string, string | undefined>): Readonly<Ap
 		DATABASE_RW_STATEMENT_TIMEOUT_MS: parsed.DATABASE_RW_STATEMENT_TIMEOUT_MS,
 		DATABASE_RO_STATEMENT_TIMEOUT_MS: parsed.DATABASE_RO_STATEMENT_TIMEOUT_MS,
 		DATABASE_PREPARE: parsed.DATABASE_PREPARE,
+		TAX_ID_ENCRYPTION_KEY: taxIdEncryptionKey,
+		TAX_ID_HMAC_KEY: taxIdHmacKey,
 	}
 }

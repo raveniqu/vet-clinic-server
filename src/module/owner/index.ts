@@ -2,6 +2,7 @@ import type { Kysely } from "kysely"
 
 import type { DB } from "src/shared/db/generated/db"
 import { KyselyUnitOfWork } from "src/shared/db/kysely-uow"
+import { AesGcmTaxIdCipher } from "./aes-gcm-tax-id-cipher"
 import type { OwnerUnitOfWorkRepos } from "./domain/owner.repo"
 import { PgOwnerRepository } from "./repository/pg-owner.repo"
 import { PgRunningNumberSequenceRepository } from "./repository/pg-running-number-sequence.repo"
@@ -11,6 +12,8 @@ import { type Clock, RegisterOwnerService } from "./use-case/command/register-ow
 export type OwnerModuleDeps = {
 	readonly rwDb: Kysely<DB>
 	readonly clock: Clock
+	readonly taxIdEncryptionKey: Uint8Array
+	readonly taxIdHmacKey: Uint8Array
 }
 
 export function createOwnerModule(deps: OwnerModuleDeps) {
@@ -18,7 +21,11 @@ export function createOwnerModule(deps: OwnerModuleDeps) {
 		owners: new PgOwnerRepository(tx),
 		sequences: new PgRunningNumberSequenceRepository(tx),
 	}))
-	const registerOwnerService = new RegisterOwnerService(uow, deps.clock)
+	const taxIdCipher = new AesGcmTaxIdCipher({
+		encryptionKey: deps.taxIdEncryptionKey,
+		hmacKey: deps.taxIdHmacKey,
+	})
+	const registerOwnerService = new RegisterOwnerService(uow, deps.clock, taxIdCipher)
 	const routes = createOwnerRoutes({ registerOwnerService: registerOwnerService })
 
 	return { routes: routes }

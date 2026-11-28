@@ -6,14 +6,31 @@ import type { RequestContext } from "src/core/request-context"
 import type { UnitOfWork } from "src/core/unit-of-work"
 import type { OwnerAddressesInput } from "src/module/owner/domain/owner-addresses.vo"
 import type { InitialOwnerConsentsInput } from "src/module/owner/domain/owner-consents.vo"
-import { type AcquisitionChannel, type JuristicOwnerPrefix, Owner } from "src/module/owner/domain/owner.domain"
+import { type AcquisitionChannel, type IndividualOwnerPrefix, type JuristicOwnerPrefix, Owner, type OwnerGender } from "src/module/owner/domain/owner.domain"
 import type { OwnerUnitOfWorkRepos } from "src/module/owner/domain/owner.repo"
+import type { TaxIdCipher } from "src/module/owner/domain/tax-id-cipher"
 
 export type Clock = {
 	now(): Date
 }
 
-export type RegisterOwnerRequest = {
+export type RegisterIndividualOwnerRequest = {
+	readonly type: "INDIVIDUAL"
+	readonly prefix: IndividualOwnerPrefix
+	readonly firstName: string
+	readonly lastName: string
+	readonly taxId: string
+	readonly dateOfBirth: string
+	readonly gender: OwnerGender
+	readonly phoneNo: string
+	readonly email?: string | null
+	readonly lineId?: string | null
+	readonly acquisitionChannel: AcquisitionChannel
+	readonly addresses: OwnerAddressesInput
+	readonly consents: InitialOwnerConsentsInput
+}
+
+export type RegisterJuristicOwnerRequest = {
 	readonly type: "JURISTIC"
 	readonly prefix: JuristicOwnerPrefix
 	readonly firstName: string
@@ -25,6 +42,8 @@ export type RegisterOwnerRequest = {
 	readonly addresses: OwnerAddressesInput
 	readonly consents: InitialOwnerConsentsInput
 }
+
+export type RegisterOwnerRequest = RegisterIndividualOwnerRequest | RegisterJuristicOwnerRequest
 
 export type RegisterOwnerResult = {
 	readonly id: number
@@ -63,10 +82,12 @@ function formatOwnerCode(compactDate: string, sequenceNumber: number): string {
 export class RegisterOwnerService implements RegisterOwnerUseCase {
 	private readonly uow: UnitOfWork<OwnerUnitOfWorkRepos>
 	private readonly clock: Clock
+	private readonly taxIdCipher: TaxIdCipher
 
-	constructor(uow: UnitOfWork<OwnerUnitOfWorkRepos>, clock: Clock) {
+	constructor(uow: UnitOfWork<OwnerUnitOfWorkRepos>, clock: Clock, taxIdCipher: TaxIdCipher) {
 		this.uow = uow
 		this.clock = clock
+		this.taxIdCipher = taxIdCipher
 	}
 
 	async execute(ctx: RequestContext, req: RegisterOwnerRequest): Promise<Result<RegisterOwnerResult, RegisterOwnerError>> {
@@ -74,22 +95,15 @@ export class RegisterOwnerService implements RegisterOwnerUseCase {
 			return err(new RequestAbortedError("Request aborted", ctx.signal.reason))
 		}
 
-		const ownerResult = Owner.registerNew({
-			prefix: req.prefix,
-			firstName: req.firstName,
-			taxId: req.taxId,
-			phoneNo: req.phoneNo,
-			email: req.email,
-			lineId: req.lineId,
-			acquisitionChannel: req.acquisitionChannel,
-			addresses: req.addresses,
-			consents: req.consents,
+		const dateParts = toBangkokDateParts(this.clock.now())
+		const ownerResult = Owner.registerNew(req, {
+			taxIdCipher: this.taxIdCipher,
+			todayBangkokIso: dateParts.isoDate,
 		})
 		if (ownerResult.isErr()) {
 			return err(ownerResult.error)
 		}
 
-		const dateParts = toBangkokDateParts(this.clock.now())
 		const txResult = await this.uow.run<RegisterOwnerResult, ConflictError | UnexpectedError>(async (repos) => {
 			const seqResult = await repos.sequences.nextNumber(ctx, "OWN", dateParts.isoDate)
 			if (seqResult.isErr()) {
