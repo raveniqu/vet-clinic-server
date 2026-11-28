@@ -9,7 +9,8 @@
 		"lint": "bunx biome check .",
 		"lint:fix": "bunx biome check --write .",
 		"format": "bunx biome format --write .",
-		"test": "bun test --pass-with-no-tests --check",
+		"test": "bun test --pass-with-no-tests --check --path-ignore-patterns='**/*.integration.test.ts'",
+		"test:integration": "bun test --pass-with-no-tests --check --timeout=30000 integration.test.ts",
 		"db:types": "bun --env-file=.env.local x kysely-codegen --dialect postgres --url='env(DATABASE_RW_URL)' --out-file src/shared/db/generated/db.d.ts",
 		"prepare:husky": "husky"
 	},
@@ -28,6 +29,7 @@
 	},
 	"devDependencies": {
 		"@biomejs/biome": "^1.9.4",
+		"@testcontainers/postgresql": "^12.2.2",
 		"@total-typescript/ts-reset": "^0.6.1",
 		"@types/bun": "^1.4.0",
 		"husky": "^9.1.7",
