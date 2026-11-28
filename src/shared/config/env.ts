@@ -18,17 +18,13 @@ const EnvSchema = Type.Object({
 	TAX_ID_HMAC_KEY: Type.String({ minLength: 1 }),
 })
 
-const STRICT_BASE64_PATTERN = /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/
+const STRICT_HEX_PATTERN = /^(?:[0-9a-fA-F]{2})+$/
 
-function decodeStrictBase64Key(raw: string, varName: string): Uint8Array {
-	if (!STRICT_BASE64_PATTERN.test(raw)) {
-		throw new Error(`Invalid environment configuration: /${varName}: must be valid canonical base64`)
+function decodeStrictHexKey(raw: string, varName: string): Uint8Array {
+	if (!STRICT_HEX_PATTERN.test(raw)) {
+		throw new Error(`Invalid environment configuration: /${varName}: must be valid even-length hex`)
 	}
-	const decoded = Buffer.from(raw, "base64")
-	if (decoded.toString("base64") !== raw) {
-		throw new Error(`Invalid environment configuration: /${varName}: must be valid canonical base64`)
-	}
-	return new Uint8Array(decoded)
+	return new Uint8Array(Buffer.from(raw, "hex"))
 }
 
 export type AppEnvConfig = {
@@ -59,12 +55,12 @@ export function loadConfig(raw: Record<string, string | undefined>): Readonly<Ap
 		.map((o) => o.trim())
 		.filter((o) => o.length > 0)
 
-	const taxIdEncryptionKey = decodeStrictBase64Key(parsed.TAX_ID_ENCRYPTION_KEY, "TAX_ID_ENCRYPTION_KEY")
+	const taxIdEncryptionKey = decodeStrictHexKey(parsed.TAX_ID_ENCRYPTION_KEY, "TAX_ID_ENCRYPTION_KEY")
 	if (taxIdEncryptionKey.byteLength !== 32) {
 		throw new Error(`Invalid environment configuration: /TAX_ID_ENCRYPTION_KEY: expected 32 decoded bytes, got ${taxIdEncryptionKey.byteLength}`)
 	}
 
-	const taxIdHmacKey = decodeStrictBase64Key(parsed.TAX_ID_HMAC_KEY, "TAX_ID_HMAC_KEY")
+	const taxIdHmacKey = decodeStrictHexKey(parsed.TAX_ID_HMAC_KEY, "TAX_ID_HMAC_KEY")
 	if (taxIdHmacKey.byteLength < 32) {
 		throw new Error(`Invalid environment configuration: /TAX_ID_HMAC_KEY: expected at least 32 decoded bytes, got ${taxIdHmacKey.byteLength}`)
 	}

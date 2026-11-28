@@ -2,8 +2,8 @@ import { describe, expect, test } from "bun:test"
 
 import { loadConfig } from "./env"
 
-const VALID_32B_KEY = Buffer.alloc(32, 0x11).toString("base64")
-const VALID_64B_KEY = Buffer.alloc(64, 0x22).toString("base64")
+const VALID_32B_KEY = Buffer.alloc(32, 0xab).toString("hex")
+const VALID_64B_KEY = Buffer.alloc(64, 0xcd).toString("hex")
 
 function makeRawEnv(overrides: Record<string, string | undefined>): Record<string, string | undefined> {
 	return {
@@ -21,23 +21,29 @@ function makeRawEnv(overrides: Record<string, string | undefined>): Record<strin
 describe("loadConfig", () => {
 	describe("Tax ID key validation", () => {
 		describe("Happy cases", () => {
-			test("decodes valid base64 32-byte TAX_ID_ENCRYPTION_KEY and 32-byte TAX_ID_HMAC_KEY", () => {
+			test("decodes valid hex 32-byte TAX_ID_ENCRYPTION_KEY and 32-byte TAX_ID_HMAC_KEY", () => {
 				const config = loadConfig(makeRawEnv({}))
 
 				expect(config.TAX_ID_ENCRYPTION_KEY).toBeInstanceOf(Uint8Array)
 				expect(config.TAX_ID_ENCRYPTION_KEY.byteLength).toBe(32)
-				expect(config.TAX_ID_ENCRYPTION_KEY).toEqual(new Uint8Array(32).fill(0x11))
+				expect(config.TAX_ID_ENCRYPTION_KEY).toEqual(new Uint8Array(32).fill(0xab))
 
 				expect(config.TAX_ID_HMAC_KEY).toBeInstanceOf(Uint8Array)
 				expect(config.TAX_ID_HMAC_KEY.byteLength).toBe(32)
-				expect(config.TAX_ID_HMAC_KEY).toEqual(new Uint8Array(32).fill(0x11))
+				expect(config.TAX_ID_HMAC_KEY).toEqual(new Uint8Array(32).fill(0xab))
 			})
 
-			test("accepts TAX_ID_HMAC_KEY longer than 32 decoded bytes", () => {
-				const config = loadConfig(makeRawEnv({ TAX_ID_HMAC_KEY: VALID_64B_KEY }))
+			test("accepts uppercase hex and TAX_ID_HMAC_KEY longer than 32 decoded bytes", () => {
+				const config = loadConfig(
+					makeRawEnv({
+						TAX_ID_ENCRYPTION_KEY: VALID_32B_KEY.toUpperCase(),
+						TAX_ID_HMAC_KEY: VALID_64B_KEY,
+					})
+				)
 
+				expect(config.TAX_ID_ENCRYPTION_KEY).toEqual(new Uint8Array(32).fill(0xab))
 				expect(config.TAX_ID_HMAC_KEY.byteLength).toBe(64)
-				expect(config.TAX_ID_HMAC_KEY).toEqual(new Uint8Array(64).fill(0x22))
+				expect(config.TAX_ID_HMAC_KEY).toEqual(new Uint8Array(64).fill(0xcd))
 			})
 		})
 
@@ -49,24 +55,24 @@ describe("loadConfig", () => {
 				expect(() => loadConfig(makeRawEnv({ TAX_ID_HMAC_KEY: "" }))).toThrow()
 			})
 
-			test("throws on invalid base64 (non-base64 chars, whitespace, bad padding, non-canonical trailing bits)", () => {
-				const nonCanonical32B = `${VALID_32B_KEY.slice(0, -3)}B==`
-				for (const bad of ["not-valid-base64!", ` ${VALID_32B_KEY}`, `${VALID_32B_KEY} `, "AAAA====", nonCanonical32B]) {
+			test("throws on invalid hex (non-hex chars, whitespace, odd-length hex, base64 string)", () => {
+				const base64Key = Buffer.alloc(32, 0xab).toString("base64")
+				for (const bad of ["not-valid-hex!", ` ${VALID_32B_KEY}`, `${VALID_32B_KEY} `, VALID_32B_KEY.slice(0, -1), base64Key]) {
 					expect(() => loadConfig(makeRawEnv({ TAX_ID_ENCRYPTION_KEY: bad }))).toThrow()
 					expect(() => loadConfig(makeRawEnv({ TAX_ID_HMAC_KEY: bad }))).toThrow()
 				}
 			})
 
 			test("throws when TAX_ID_ENCRYPTION_KEY is not exact 32 decoded bytes", () => {
-				const key31 = Buffer.alloc(31, 0x11).toString("base64")
-				const key33 = Buffer.alloc(33, 0x11).toString("base64")
+				const key31 = Buffer.alloc(31, 0x11).toString("hex")
+				const key33 = Buffer.alloc(33, 0x11).toString("hex")
 
 				expect(() => loadConfig(makeRawEnv({ TAX_ID_ENCRYPTION_KEY: key31 }))).toThrow(/TAX_ID_ENCRYPTION_KEY/)
 				expect(() => loadConfig(makeRawEnv({ TAX_ID_ENCRYPTION_KEY: key33 }))).toThrow(/TAX_ID_ENCRYPTION_KEY/)
 			})
 
 			test("throws when TAX_ID_HMAC_KEY is less than 32 decoded bytes", () => {
-				const key31 = Buffer.alloc(31, 0x22).toString("base64")
+				const key31 = Buffer.alloc(31, 0x22).toString("hex")
 
 				expect(() => loadConfig(makeRawEnv({ TAX_ID_HMAC_KEY: key31 }))).toThrow(/TAX_ID_HMAC_KEY/)
 			})
