@@ -1,7 +1,7 @@
 import { getLogger } from "@logtape/logtape"
 import { type Result, err, ok } from "neverthrow"
 
-import { type ConflictError, type DomainValidationError, UnexpectedError } from "src/core/errors"
+import { type ConflictError, type DomainValidationError, RequestAbortedError, type UnexpectedError } from "src/core/errors"
 import type { RequestContext } from "src/core/request-context"
 import type { UnitOfWork } from "src/core/unit-of-work"
 import type { OwnerAddressesInput } from "src/module/owner/domain/owner-addresses.vo"
@@ -30,7 +30,7 @@ export type RegisterOwnerResult = {
 	readonly id: number
 }
 
-export type RegisterOwnerError = DomainValidationError | ConflictError | UnexpectedError
+export type RegisterOwnerError = DomainValidationError | ConflictError | RequestAbortedError | UnexpectedError
 
 export interface RegisterOwnerUseCase {
 	execute(ctx: RequestContext, req: RegisterOwnerRequest): Promise<Result<RegisterOwnerResult, RegisterOwnerError>>
@@ -71,7 +71,7 @@ export class RegisterOwnerService implements RegisterOwnerUseCase {
 
 	async execute(ctx: RequestContext, req: RegisterOwnerRequest): Promise<Result<RegisterOwnerResult, RegisterOwnerError>> {
 		if (ctx.signal.aborted) {
-			return err(new UnexpectedError("Request aborted", ctx.signal.reason))
+			return err(new RequestAbortedError("Request aborted", ctx.signal.reason))
 		}
 
 		const ownerResult = Owner.registerNew({

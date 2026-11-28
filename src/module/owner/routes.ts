@@ -1,7 +1,7 @@
 import { getLogger } from "@logtape/logtape"
 import { Elysia } from "elysia"
 
-import { ConflictError, DomainValidationError } from "src/core/errors"
+import { ConflictError, DomainValidationError, RequestAbortedError } from "src/core/errors"
 import { newAuthPlugin } from "src/shared/http/auth-plugin"
 import type { ErrorResponseBody } from "src/shared/http/error-plugin"
 import { type RegisterJuristicOwnerBody, RegisterJuristicOwnerBodySchema, type RegisterOwnerResponse } from "./contracts"
@@ -74,6 +74,11 @@ export function createOwnerRoutes(deps: OwnerRoutesDeps) {
 					if (error instanceof ConflictError) {
 						set.status = 409
 						return { error_message: error.message }
+					}
+					if (error instanceof RequestAbortedError) {
+						logger.warn("Owner registration aborted by client")
+						set.status = 499
+						return { error_message: "Client disconnected" }
 					}
 
 					logger.error("Failed to register owner: {reason}", {

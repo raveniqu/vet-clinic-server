@@ -3,7 +3,7 @@ import { AsyncLocalStorage } from "node:async_hooks"
 import { type LogRecord, configure, reset } from "@logtape/logtape"
 import { type Result, type ResultAsync, errAsync, okAsync } from "neverthrow"
 
-import { ConflictError, DomainValidationError, UnexpectedError } from "src/core/errors"
+import { ConflictError, DomainValidationError, RequestAbortedError, UnexpectedError } from "src/core/errors"
 import type { RequestContext } from "src/core/request-context"
 import type { UnitOfWork } from "src/core/unit-of-work"
 import type { Owner } from "src/module/owner/domain/owner.domain"
@@ -179,7 +179,7 @@ describe("RegisterOwnerService", () => {
 
 				expect(result.isErr()).toBe(true)
 				if (result.isErr()) {
-					expect(result.error).toBeInstanceOf(UnexpectedError)
+					expect(result.error).toBeInstanceOf(RequestAbortedError)
 				}
 				expect(state.uowRuns).toBe(0)
 			})

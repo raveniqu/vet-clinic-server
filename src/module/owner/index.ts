@@ -24,5 +24,4 @@ export function createOwnerModule(deps: OwnerModuleDeps) {
 	return { routes: routes }
 }
 
-export { createOwnerRoutes }
 export type { Clock, OwnerRoutes }

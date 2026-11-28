@@ -276,14 +276,34 @@ describe("POST /api/v1/owners", () => {
 		})
 
 		test("fails before opening DB transaction when Request signal is aborted", async () => {
-			const { app, getUowRuns } = createInMemoryServiceApp()
-			const controller = new AbortController()
-			controller.abort("client closed")
+			const records: LogRecord[] = []
+			await configure({
+				reset: true,
+				contextLocalStorage: new AsyncLocalStorage(),
+				sinks: {
+					test: (record: LogRecord) => {
+						records.push(record)
+					},
+				},
+				loggers: [{ category: ["app", "owner"], lowestLevel: "warning", sinks: ["test"] }],
+			})
 
-			const response = await postOwners(app, makeValidPayload(), controller.signal)
+			try {
+				const { app, getUowRuns } = createInMemoryServiceApp()
+				const controller = new AbortController()
+				controller.abort("client closed")
 
-			expect(response.status).toBe(500)
-			expect(getUowRuns()).toBe(0)
+				const response = await postOwners(app, makeValidPayload(), controller.signal)
+
+				expect(response.status).toBe(499)
+				expect(await response.json()).toEqual({ error_message: "Client disconnected" })
+				expect(getUowRuns()).toBe(0)
+				expect(records).toHaveLength(1)
+				expect(records[0]?.level).toBe("warning")
+				expect(JSON.stringify(records[0])).not.toContain("0215568005093")
+			} finally {
+				await reset()
+			}
 		})
 	})
 })

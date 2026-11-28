@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test"
 
-import { AppError, ConflictError, DomainValidationError, NotFoundError, UnexpectedError, mapPgError } from "src/core/errors"
+import { AppError, ConflictError, DomainValidationError, NotFoundError, RequestAbortedError, UnexpectedError, mapPgError } from "src/core/errors"
 
 describe("Core errors", () => {
 	describe("AppError hierarchy", () => {
@@ -32,6 +32,17 @@ describe("Core errors", () => {
 				expect(err.code).toBe("NOT_FOUND")
 				expect(err.name).toBe("NotFoundError")
 				expect(err.message).toBe("Owner not found")
+			})
+
+			test("constructs RequestAbortedError preserving original cause", () => {
+				const reason = new Error("client closed")
+				const err = new RequestAbortedError("Request aborted", reason)
+
+				expect(err).toBeInstanceOf(AppError)
+				expect(err.code).toBe("REQUEST_ABORTED")
+				expect(err.name).toBe("RequestAbortedError")
+				expect(err.message).toBe("Request aborted")
+				expect(err.cause).toBe(reason)
 			})
 
 			test("constructs UnexpectedError preserving original cause", () => {
