@@ -1,10 +1,18 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test"
-import { sql } from "kysely"
+import { type Kysely, sql } from "kysely"
 import { ResultAsync, err, ok } from "neverthrow"
 
 import { ConflictError, type DomainError, DomainValidationError, mapPgError } from "src/core/errors"
+import type { DB } from "src/shared/db/generated/db"
 import { KyselyUnitOfWork } from "src/shared/db/kysely-uow"
 import { type TestPostgres, startTestPostgres } from "src/shared/db/pg-testcontainer"
+
+function createSequenceUow(db: Kysely<DB>) {
+	return new KyselyUnitOfWork(db, (tx) => ({
+		insertSequence: (prefix: string, date: string, lastNumber: number) =>
+			ResultAsync.fromPromise(tx.insertInto("running_number_sequences").values({ prefix: prefix, sequence_date: date, last_number: lastNumber }).execute(), mapPgError),
+	}))
+}
 
 let pg: TestPostgres
 
@@ -40,13 +48,7 @@ describe("KyselyUnitOfWork (Postgres integration)", () => {
 	describe("run", () => {
 		describe("Happy cases", () => {
 			test("commits inserted rows when callback returns ok", async () => {
-				const uow = new KyselyUnitOfWork(pg.db, (tx) => ({
-					insertSequence: (prefix: string, date: string, lastNumber: number) =>
-						ResultAsync.fromPromise(
-							tx.insertInto("running_number_sequences").values({ prefix: prefix, sequence_date: date, last_number: lastNumber }).execute(),
-							mapPgError
-						),
-				}))
+				const uow = createSequenceUow(pg.db)
 
 				const res = await uow.run<string, DomainError>(async (repos) => {
 					const inserted = await repos.insertSequence("OWN", "2026-11-28", 1)
@@ -66,13 +68,7 @@ describe("KyselyUnitOfWork (Postgres integration)", () => {
 
 		describe("Unhappy cases", () => {
 			test("rolls back inserted rows when callback returns err", async () => {
-				const uow = new KyselyUnitOfWork(pg.db, (tx) => ({
-					insertSequence: (prefix: string, date: string, lastNumber: number) =>
-						ResultAsync.fromPromise(
-							tx.insertInto("running_number_sequences").values({ prefix: prefix, sequence_date: date, last_number: lastNumber }).execute(),
-							mapPgError
-						),
-				}))
+				const uow = createSequenceUow(pg.db)
 
 				const res = await uow.run<void, DomainError>(async (repos) => {
 					const inserted = await repos.insertSequence("OWN", "2026-11-28", 1)
@@ -91,13 +87,7 @@ describe("KyselyUnitOfWork (Postgres integration)", () => {
 			})
 
 			test("maps Postgres 23505 unique violation to ConflictError with constraint name and rolls back", async () => {
-				const uow = new KyselyUnitOfWork(pg.db, (tx) => ({
-					insertSequence: (prefix: string, date: string, lastNumber: number) =>
-						ResultAsync.fromPromise(
-							tx.insertInto("running_number_sequences").values({ prefix: prefix, sequence_date: date, last_number: lastNumber }).execute(),
-							mapPgError
-						),
-				}))
+				const uow = createSequenceUow(pg.db)
 
 				const res = await uow.run<void, DomainError>(async (repos) => {
 					const first = await repos.insertSequence("OWN", "2026-11-28", 1)
