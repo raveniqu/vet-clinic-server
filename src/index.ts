@@ -1,6 +1,7 @@
 import { getLogger } from "@logtape/logtape"
 
 import { createApp } from "src/app"
+import { createOwnerModule } from "src/module/owner"
 import { loadConfig } from "src/shared/config/env"
 import { createDbPools, waitForDbReady } from "src/shared/db/client"
 import { setupLogging } from "src/shared/logger/logtape"
@@ -29,9 +30,15 @@ if (dbReady.isErr()) {
 	process.exit(1)
 }
 
+const ownerModule = createOwnerModule({
+	rwDb: db.rw,
+	clock: { now: () => new Date() },
+})
+
 const app = createApp({
 	nodeEnv: conf.NODE_ENV,
 	corsOrigins: conf.CORS_ORIGINS,
+	ownerRoutes: ownerModule.routes,
 }).listen({
 	port: conf.PORT,
 	maxRequestBodySize: 7 * 1024 * 1024, // 7 MB cap

@@ -25,6 +25,16 @@ export class NotFoundError extends AppError {
 	override readonly code = "NOT_FOUND" as const
 }
 
+export class RequestAbortedError extends AppError {
+	override readonly code = "REQUEST_ABORTED" as const
+	override readonly cause: unknown
+
+	constructor(message: string, cause: unknown) {
+		super(message)
+		this.cause = cause
+	}
+}
+
 export class UnexpectedError extends AppError {
 	override readonly code = "UNEXPECTED" as const
 	override readonly cause: unknown
@@ -35,7 +45,7 @@ export class UnexpectedError extends AppError {
 	}
 }
 
-export type DomainError = DomainValidationError | ConflictError | NotFoundError | UnexpectedError
+export type DomainError = DomainValidationError | ConflictError | NotFoundError | RequestAbortedError | UnexpectedError
 
 type PgErrorLike = {
 	readonly code?: unknown

@@ -24,7 +24,7 @@ export type TestPostgres = {
 }
 
 export async function startTestPostgres(): Promise<TestPostgres> {
-	const container = await new PostgreSqlContainer("postgres:18").withEnvironment({ POSTGRES_INITDB_ARGS: "--locale-provider=icu --icu-locale=th" }).start()
+	const container = await new PostgreSqlContainer("postgres:18-alpine").withEnvironment({ POSTGRES_INITDB_ARGS: "--locale-provider=icu --icu-locale=th" }).start()
 
 	const connectionUri = container.getConnectionUri()
 	const setupClient = postgres(connectionUri)

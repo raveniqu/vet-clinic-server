@@ -33,15 +33,15 @@ beforeEach(async () => {
 describe("KyselyUnitOfWork (Postgres integration)", () => {
 	describe("collation setup", () => {
 		test("initializes Postgres 18 database with ICU Thai collation", async () => {
-			const result = await sql<{ datlocprovider: string; daticulocale: string | null }>`
-				SELECT datlocprovider::text, daticulocale
+			const result = await sql<{ datlocprovider: string; datlocale: string | null }>`
+				SELECT datlocprovider::text, datlocale
 				FROM pg_database
 				WHERE datname = current_database()
 			`.execute(pg.db)
 
 			const row = result.rows[0]
 			expect(row?.datlocprovider).toBe("i")
-			expect(row?.daticulocale).toBe("th")
+			expect(row?.datlocale).toBe("th")
 		})
 	})
 
